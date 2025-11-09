@@ -48,12 +48,14 @@ This repository contains samples in multiple programming languages. Choose your 
 Complete C# samples demonstrating:
 - **Agent Quickstart**: Connect to Azure AI Foundry agents with proactive greetings
 - **Model Quickstart**: Direct VoiceLive model integration
+- **Bring-Your-Own-Model (BYOM) Quickstart**: Use your own models hosted in Foundry
 - Built with .NET 8.0 and self-contained code
 
 ### [Python Samples](./python/)
 Python samples showcasing:
 - **Agent Quickstart**: Azure AI Foundry agent integration
 - **Model Quickstart**: Direct model access with flexible authentication
+- **Bring-Your-Own-Model (BYOM) Quickstart**: Use your own models hosted in Foundry
 - **Function Calling**: Advanced tool integration with custom functions
 - Built with Python 3.8+ and async/await patterns
 

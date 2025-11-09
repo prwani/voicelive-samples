@@ -8,7 +8,7 @@ This sample demonstrates how to build a real-time voice assistant using direct V
 
 This sample showcases:
 
-- **Direct Model Access**: Connects directly to VoiceLive models (e.g., GPT-4o-realtime-preview)
+- **Direct Model Access**: Connects directly to VoiceLive models (e.g., GPT-realtime)
 - **Custom Instructions**: Define your own system instructions for the AI
 - **Flexible Authentication**: Supports both API key and Azure credential authentication
 - **Model Selection**: Choose from available VoiceLive models
@@ -27,7 +27,7 @@ This sample showcases:
      "VoiceLive": {
        "ApiKey": "your-voicelive-api-key",
        "Endpoint": "https://your-endpoint.services.ai.azure.com/",
-       "Model": "gpt-4o-realtime-preview",
+       "Model": "gpt-realtime",
        "Voice": "en-US-AvaNeural"
      }
    }
@@ -49,7 +49,7 @@ dotnet run
 dotnet run --use-token-credential
 
 # Run with custom model and instructions
-dotnet run --model "gpt-4o-realtime-preview" --instructions "You are a helpful assistant"
+dotnet run --model "gpt-realtime" --instructions "You are a helpful assistant"
 
 # Run with custom voice and verbose logging
 dotnet run --voice "en-US-JennyNeural" --verbose
@@ -59,7 +59,7 @@ dotnet run --voice "en-US-JennyNeural" --verbose
 
 - `--api-key`: Azure VoiceLive API key
 - `--endpoint`: Azure VoiceLive endpoint URL
-- `--model`: VoiceLive model to use (default: "gpt-4o-realtime-preview")
+- `--model`: VoiceLive model to use (default: "gpt-realtime")
 - `--voice`: Voice for the assistant (default: "en-US-AvaNeural")
 - `--instructions`: Custom system instructions for the AI
 - `--use-token-credential`: Use Azure authentication instead of API key

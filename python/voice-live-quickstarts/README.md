@@ -3,6 +3,7 @@
 This folder contains three Python quickstart samples demonstrating different ways to use Azure AI Speech Service VoiceLive:
 
 - [Model Quickstart](#model-quickstart) - Direct VoiceLive model integration with custom instructions
+- [Bring-Your-Own-Model Quickstart (BYOM)](#byom-quickstart) - Demonstrates direct integration with VoiceLive using bring-your-own-models from Foundry.
 - [Agent Quickstart](#agent-quickstart) - Integration with Azure AI Foundry agents
 - [Function Calling Quickstart](#function-calling-quickstart) - Custom function execution during conversations
 
@@ -16,7 +17,7 @@ This sample demonstrates how to build a real-time voice assistant using direct V
 
 This sample showcases:
 
-- **Direct Model Access**: Connects directly to VoiceLive models (e.g., GPT-4o-realtime-preview)
+- **Direct Model Access**: Connects directly to VoiceLive models (e.g., gpt-realtime)
 - **Custom Instructions**: Define your own system instructions for the AI
 - **Flexible Authentication**: Supports both API key and Azure credential authentication
 - **Model Selection**: Choose from available VoiceLive models
@@ -64,10 +65,10 @@ This sample showcases:
 python model-quickstart.py
 
 # Run with Azure authentication
-python model-quickstart.py --use-entra-id
+python model-quickstart.py --use-token-credential
 
 # Run with custom model and instructions
-python model-quickstart.py --model gpt-4o-realtime-preview --instructions "You are a helpful assistant"
+python model-quickstart.py --model gpt-realtime --instructions "You are a helpful assistant"
 
 # Run with custom voice and verbose logging
 python model-quickstart.py --voice en-US-JennyNeural -v
@@ -77,10 +78,10 @@ python model-quickstart.py --voice en-US-JennyNeural -v
 
 - `--api-key`: Azure VoiceLive API key
 - `--endpoint`: Azure VoiceLive endpoint URL
-- `--model`: VoiceLive model to use (default: gpt-4o-realtime-preview)
+- `--model`: VoiceLive model to use (default: gpt-realtime)
 - `--voice`: Voice for the assistant
 - `--instructions`: Custom system instructions for the AI
-- `--use-entra-id`: Use Azure authentication instead of API key
+- `--use-token-credential`: Use Azure authentication instead of API key
 - `-v, --verbose`: Enable detailed logging
 
 #### Available Models
@@ -101,6 +102,104 @@ The sample:
 5. Streams audio to the model in real-time
 6. Plays back model responses through speakers
 7. Handles interruptions and turn-taking naturally
+
+## Bring-Your-Own-Model Quickstart
+
+> **For common setup instructions, troubleshooting, and detailed information, see the [Python Samples README](../README.md)**
+
+This sample demonstrates how to build a real-time voice assistant using direct VoiceLive model integration with bring-your-own-model. It provides a straightforward approach without agent overhead, ideal for scenarios where you want full control over model selection and instructions but with your own model hosted in Foundry.
+
+### What Makes This Sample Unique
+
+This sample showcases:
+
+- **Bring-Your-Own-Model Integration**: Connects direct to a self hosted model
+- **Proactive Greeting**: Agent initiates the conversation with a welcome message
+- **Custom Instructions**: Define your own system instructions for the AI
+- **Flexible Authentication**: Supports both API key and Azure credential authentication
+
+### Prerequisites
+
+- [Azure AI Foundry project](https://learn.microsoft.com/azure/ai-studio/how-to/create-projects) with a deployed model
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) for authentication
+- See [Python Samples README](../README.md) for common prerequisites
+
+### Quick Start
+
+1. **Authenticate with Azure**:
+   ```bash
+   az login
+   ```
+
+2. **Create and activate virtual environment**:
+   ```bash
+   python -m venv .venv
+   
+   # On Windows
+   .venv\Scripts\activate
+   
+   # On Linux/macOS
+   source .venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Update `.env` file**:
+   ```plaintext
+   AZURE_VOICELIVE_ENDPOINT=https://your-endpoint.services.ai.azure.com/
+   AZURE_VOICELIVE_MODEL=<your-model-name>
+   AZURE_VOICELIVE_BYOM_MODE=byom-azure-openai-chat-completion
+   AZURE_VOICELIVE_API_VERSION=2025-10-01
+   ```
+
+5. **Run the sample**:
+   ```bash
+   python bring-your-own-model-quickstart.py
+   ```
+
+### Command Line Options
+
+```bash
+# Run with settings from .env
+python bring-your-own-model-quickstart.py
+
+# Run with command line parameters
+python bring-your-own-model-quickstart.py --model youe-model-name --byom byom-mode
+
+# Run with custom voice and verbose logging
+python bring-your-own-model-quickstart.py --voice en-US-JennyNeural -v
+```
+
+#### Available Options
+
+- `--endpoint`: Azure VoiceLive endpoint URL
+- `--model`: VoiceLive model to use (default: gpt-realtime)
+- `--byom`: BYOM integration mode (default: "byom-azure-openai-chat-completion"; use "byom-azure-openai-realtime" for multimodal models)
+- `--voice`: Voice for the assistant
+- `-v, --verbose`: Enable detailed logging
+
+See [Python Samples README](../README.md) for available voices, troubleshooting, and additional resources.
+
+### How It Works
+
+The sample:
+
+1. Authenticates using Azure credentials (`DefaultAzureCredential`)
+2. Connects to your deployed Azure AI Foundry agent
+3. Agent sends a proactive greeting to start the conversation
+4. Captures audio from your microphone
+5. Streams audio to the agent in real-time
+6. Plays back agent responses through speakers
+7. Handles interruptions and turn-taking naturally
+
+
+
+
+
+
 
 ## Agent Quickstart
 
@@ -253,7 +352,7 @@ This sample showcases:
 python function-calling-quickstart.py
 
 # Run with Azure authentication
-python function-calling-quickstart.py --use-entra-id
+python function-calling-quickstart.py --use-token-credential
 
 # Run with custom voice and verbose logging
 python function-calling-quickstart.py --voice en-US-JennyNeural -v
@@ -263,9 +362,9 @@ python function-calling-quickstart.py --voice en-US-JennyNeural -v
 
 - `--api-key`: Azure VoiceLive API key
 - `--endpoint`: Azure VoiceLive endpoint URL
-- `--model`: VoiceLive model to use (default: gpt-4o-realtime-preview)
+- `--model`: VoiceLive model to use (default: gpt-realtime)
 - `--voice`: Voice for the assistant
-- `--use-entra-id`: Use Azure authentication instead of API key
+- `--use-token-credential`: Use Azure authentication instead of API key
 - `-v, --verbose`: Enable detailed logging
 
 See [Python Samples README](../README.md) for available voices, troubleshooting, and additional resources.

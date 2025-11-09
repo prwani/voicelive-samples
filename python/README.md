@@ -26,6 +26,16 @@ Demonstrates direct integration with VoiceLive models for voice conversations wi
 - Custom instructions support
 - Model selection options
 
+### [Bring-Your-Own-Model (BYOM) Quickstart](./voice-live-quickstarts/bring-your-own-model-quickstart.py)
+
+Demonstrates direct integration with VoiceLive using bring-your-own-models from Foundry.
+
+**Key Features:**
+- Bring-Your-Own-Model Integration: Connects direct to a self hosted model
+- Proactive Greeting: Agent initiates the conversation with a welcome message
+- Custom Instructions: Define your own system instructions for the AI
+- Flexible Authentication: Supports both API key and Azure credential authentication
+
 ### [Function Calling Quickstart](./voice-live-quickstarts/function-calling-quickstart.py)
 
 Demonstrates how to implement function calling with VoiceLive models, enabling the AI to execute custom functions during conversations.
@@ -53,7 +63,7 @@ Depending on which sample you want to run:
 - [Azure AI Foundry project](https://learn.microsoft.com/azure/ai-studio/how-to/create-projects) with a deployed agent
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) for authentication
 
-**For Model Quickstart and Function Calling:**
+**For Model Quickstart, BYOM Quickstart, and Function Calling:**
 - [AI Foundry resource](https://learn.microsoft.com/en-us/azure/ai-services/multi-service-resource)
 - API key or [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) for authentication
 
@@ -92,6 +102,8 @@ Depending on which sample you want to run:
    # or
    python model-quickstart.py
    # or
+   python bring-your-own-model-quickstart.py
+   # or
    python function-calling-quickstart.py
    ```
 
@@ -103,14 +115,18 @@ az login
 python agents-quickstart.py
 ```
 
-**Model Quickstart and Function Calling** support both methods:
+**Model Quickstart, BYOM Quickstart, and Function Calling** support both methods:
 ```bash
 # With API key (from .env file)
 python model-quickstart.py
+# or
+python bring-your-own-model-quickstart.py
 
 # With Azure credentials
 az login
-python model-quickstart.py --use-entra-id
+python model-quickstart.py --use-token-credential
+# or
+python bring-your-own-model-quickstart.py --use-token-credential
 ```
 
 ## Configuration
@@ -242,7 +258,7 @@ All samples support these options (use `--help` for full details):
 **Model/Function-specific options:**
 - `--api-key`: Azure VoiceLive API key
 - `--model`: VoiceLive model to use
-- `--use-entra-id`: Use Azure authentication instead of API key
+- `--use-token-credential`: Use Azure authentication instead of API key
 
 ## Requirements
 

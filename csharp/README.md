@@ -6,7 +6,7 @@ This folder contains C# samples demonstrating how to build real-time voice assis
 
 ## Available Samples
 
-### [Agent Quickstart](./agent-quickstart/)
+### [Agent Quickstart](./AgentQuickstart/)
 Demonstrates connecting to an Azure AI Foundry agent for voice conversations. The agent handles model selection, instructions, and tools, with support for proactive greetings.
 
 **Key Features:**
@@ -15,7 +15,7 @@ Demonstrates connecting to an Azure AI Foundry agent for voice conversations. Th
 - Azure authentication (required)
 - Agent-managed tools and instructions
 
-### [Model Quickstart](./model-quickstart/)
+### [Model Quickstart](./ModelQuickstart/)
 Demonstrates direct integration with VoiceLive models for voice conversations without agent overhead.
 
 **Key Features:**
@@ -24,6 +24,15 @@ Demonstrates direct integration with VoiceLive models for voice conversations wi
 - Custom instructions support
 - Model selection options
 
+### [Bring-Your-Own-Model Quickstart (BYOM)](./BringYourOwnModelQuickstart/)
+Demonstrates direct integration with VoiceLive using bring-your-own-models from Foundry.
+
+**Key Features:**
+- Bring-Your-Own-Model Integration: Connects direct to a self hosted model
+- Proactive Greeting: Agent initiates the conversation with a welcome message
+- Custom Instructions: Define your own system instructions for the AI
+- Flexible Authentication: Supports both API key and Azure credential authentication
+- 
 ## Prerequisites
 
 All samples require:
@@ -48,7 +57,7 @@ Depending on which sample you want to run:
 
 ### Quick Start
 
-1. **Choose a sample**: Navigate to either `agent-quickstart` or `model-quickstart` folder
+1. **Choose a sample**: Navigate to either `AgentQuickstart` or `ModelQuickstart` folder
 2. **Install prerequisites**: Ensure .NET 8.0 SDK is installed
 3. **Set up Azure resources**: Create required Azure resources based on the sample
 4. **Configure settings**: Update `appsettings.json` with your Azure credentials
@@ -67,7 +76,7 @@ az login
 dotnet run
 ```
 
-**Model Quickstart** supports both methods:
+**Bring-Your-Own-/Model Quickstart** supports both methods:
 ```powershell
 # With API key (from appsettings.json or --api-key)
 dotnet run
@@ -89,7 +98,7 @@ Each sample includes an `appsettings.json` file for configuration:
     "Voice": "en-US-AvaNeural"
   },
   "Agent": {
-    "Id": "asst_your-agent-id",
+    "Id": "your-agent-id",
     "ProjectName": "your-project-name"
   }
 }
@@ -101,7 +110,20 @@ Each sample includes an `appsettings.json` file for configuration:
   "VoiceLive": {
     "ApiKey": "your-voicelive-api-key",
     "Endpoint": "https://your-endpoint.services.ai.azure.com/",
-    "Model": "gpt-4o-realtime-preview",
+    "Model": "gpt-realtime",
+    "Voice": "en-US-AvaNeural"
+  }
+}
+```
+
+### Bring-Your-Own-Model Quickstart Configuration
+```json
+{
+  "VoiceLive": {
+    "ApiKey": "your-voicelive-api-key",
+    "Endpoint": "https://your-endpoint.services.ai.azure.com/",
+    "Model": "your-model-name",
+    "Byom": "byom-azure-openai-chat-completion", // For multimodal models use "byom-azure-openai-realtime"
     "Voice": "en-US-AvaNeural"
   }
 }
@@ -139,9 +161,9 @@ User Voice → Microphone → AudioProcessor → VoiceLive SDK → Azure AI Foun
 User Hears ← Speakers ← AudioProcessor ← VoiceLive SDK ← Agent Response
 ```
 
-### Model Quickstart Flow
+### Bring-Your-Own-/Model Quickstart Flow
 ```
-User Voice → Microphone → AudioProcessor → VoiceLive SDK → Azure AI Model (GPT-4o)
+User Voice → Microphone → AudioProcessor → VoiceLive SDK → Azure AI Model (GPT-4o/BYOM)
                                                                       ↓
 User Hears ← Speakers ← AudioProcessor ← VoiceLive SDK ← Model Response
 ```
@@ -194,6 +216,9 @@ Both samples support these options:
 - `--model`: VoiceLive model to use
 - `--instructions`: Custom system instructions
 - `--use-token-credential`: Use Azure authentication
+
+**Bring-Your-Own-Model-specific options:**
+- `--byom`: BYOM integration mode (default: "byom-azure-openai-chat-completion"; use "byom-azure-openai-realtime" for multimodal models)
 
 ## Additional Resources
 
