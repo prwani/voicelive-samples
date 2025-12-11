@@ -2050,8 +2050,9 @@ const ChatInterface = () => {
                                   }
                                 }}
                                 disabled={isConnected || !tool.enabled}
+                                hidden={!tool.enabled}
                               />
-                              <label htmlFor={tool.id} className="text-sm">
+                              <label htmlFor={tool.id} className="text-sm" hidden={!tool.enabled}>
                                 {tool.label}
                               </label>
                             </div>
