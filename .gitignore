@@ -445,3 +445,7 @@ target/
 .settings/
 dependency-reduced-pom.xml
 application.properties
+
+# JavaScript files
+package-lock.json
+node_modules/

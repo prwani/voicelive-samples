@@ -1,43 +1,43 @@
 # JavaScript/TypeScript Voice Assistant Samples
 
-[Reference documentation](/javascript/api/overview/azure/ai-voicelive-readme) | [Package (npm)](https://www.npmjs.com/package/@azure/ai-voicelive)
+[Reference documentation](https://learn.microsoft.com/javascript/api/overview/azure/ai-voicelive-readme) | [Package (npm)](https://www.npmjs.com/package/@azure/ai-voicelive)
 
 This folder contains JavaScript samples demonstrating how to build real-time voice assistants using Azure AI Speech VoiceLive service. Each sample is self-contained for easy understanding and deployment.
 
-## 🚧 Under Construction
+## Available Samples
 
-JavaScript and TypeScript samples for Azure AI Speech Service Voice Live are currently under development.
+### [Basic Web Voice Assistant](./basic-web-voice-assistant/)
 
-## Coming Soon
+A browser-based voice assistant demonstrating Azure Voice Live SDK integration in a web application using TypeScript and the Web Audio API.
 
-We're working on JavaScript/TypeScript samples that will demonstrate:
+**Key Features:**
+- Client/Session architecture with type-safe handler-based events
+- Real-time bi-directional audio streaming (PCM16)
+- Live transcription and streaming text responses
+- Barge-in support for natural conversation interruption
+- Audio level visualization
+- Support for OpenAI and Azure Neural voices
 
-- **Agent Quickstart**: Connect to Azure AI Foundry agents for voice conversations
-- **Model Quickstart**: Direct VoiceLive model integration
-- **Function Calling**: Advanced tool integration with custom functions
-- **Node.js Examples**: Server-side voice assistant implementations
-- **Browser Examples**: Client-side web application integration
+## Prerequisites
 
-## Stay Updated
+All samples require:
 
-Check back soon for:
-- Complete JavaScript SDK examples
-- npm package configurations
-- TypeScript type definitions
-- Detailed setup and configuration guides
-- Best practices for JavaScript voice assistant development
+- [Node.js 18+](https://nodejs.org/) with npm
+- Modern browser (Chrome 66+, Firefox 60+, Safari 11.1+, Edge 79+)
+- [Azure subscription](https://azure.microsoft.com/free/) - Create one for free
+- [AI Foundry resource](https://learn.microsoft.com/azure/ai-services/multi-service-resource) with Voice Live enabled
 
-## In the Meantime
+## Getting Started
 
-Explore our available samples:
-- [C# Samples](../csharp/README.md) - .NET implementation
-- [Python Samples](../python/README.md) - Python implementation
+See individual sample READMEs for detailed setup instructions.
 
 ## Resources
 
 - [Azure AI Speech - Voice Live Documentation](https://learn.microsoft.com/azure/ai-services/speech-service/voice-live)
 - [Support Guide](../SUPPORT.md)
 
-## Contributing
+## See Also
 
-Interested in contributing JavaScript/TypeScript samples? Please see our [Contributing Guidelines](../SUPPORT.md#contributing).
+- [C# Samples](../csharp/README.md) - .NET implementation
+- [Python Samples](../python/README.md) - Python implementation
+- [Java Samples](../java/README.md) - Java implementation
