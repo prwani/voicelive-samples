@@ -47,6 +47,17 @@ Demonstrates how to implement function calling with VoiceLive models, enabling t
 - Advanced tool integration
 - Proactive greeting support
 
+### [RAG-enabled Voice Assistant](./voice-live-voicerag-assistant/README.md)
+
+Demonstrates how to build a real-time voice assistant with Retrieval-Augmented Generation (RAG) capabilities using Azure AI Voice Live API and Azure AI Search.
+
+**Key Features:**
+- Real-time speech-to-speech interaction powered by Voice live
+- RAG integration with Azure AI Search for document retrieval
+- Full-stack architecture (React/TypeScript frontend + FastAPI backend)
+- Azure AI Foundry Agent Service integration
+- Production-ready `azd` deployment to Azure Container Apps
+
 ## Prerequisites
 
 All samples require:
