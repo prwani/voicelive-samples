@@ -68,13 +68,6 @@ if ! command -v az &> /dev/null; then
 fi
 print_success "Azure CLI is installed"
 
-# Check if Docker is installed
-if ! command -v docker &> /dev/null; then
-    print_error "Docker is not installed. Please install it from: https://www.docker.com/get-started"
-    exit 1
-fi
-print_success "Docker is installed"
-
 # Check if logged in to Azure
 if ! az account show &> /dev/null; then
     print_error "Not logged in to Azure. Please run 'az login' first"
@@ -136,27 +129,28 @@ print_info "ACR Login Server: $ACR_LOGIN_SERVER"
 
 print_header "Building and Pushing Docker Image"
 
-print_info "Logging in to Azure Container Registry..."
-az acr login --name "$CONTAINER_REGISTRY_NAME"
-print_success "Logged in to ACR"
-
-FULL_IMAGE_NAME="$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG"
-print_info "Building Docker image: $FULL_IMAGE_NAME"
+FULL_IMAGE_NAME="$IMAGE_NAME:$IMAGE_TAG"
+print_info "Building Docker image in ACR: $ACR_LOGIN_SERVER/$FULL_IMAGE_NAME"
 
 if [ -n "$CNV_VOICE" ]; then
-    docker build \
+    print_info "Building with CNV_VOICE build argument..."
+    az acr build \
+        --registry "$CONTAINER_REGISTRY_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --image "$FULL_IMAGE_NAME" \
         --build-arg CNV_VOICE="$CNV_VOICE" \
-        -t "$FULL_IMAGE_NAME" \
+        --file Dockerfile \
         .
 else
-    docker build -t "$FULL_IMAGE_NAME" .
+    az acr build \
+        --registry "$CONTAINER_REGISTRY_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --image "$FULL_IMAGE_NAME" \
+        --file Dockerfile \
+        .
 fi
 
-print_success "Docker image built"
-
-print_info "Pushing image to Azure Container Registry..."
-docker push "$FULL_IMAGE_NAME"
-print_success "Image pushed to ACR"
+print_success "Docker image built and pushed to ACR"
 
 # ============================================================================
 # Container Apps Environment Creation
@@ -220,7 +214,7 @@ if az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE
     az containerapp update \
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP" \
-        --image "$FULL_IMAGE_NAME" \
+        --image "$ACR_LOGIN_SERVER/$FULL_IMAGE_NAME" \
         --set-env-vars $ENV_VARS \
         --output none
     
@@ -244,7 +238,7 @@ else
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP" \
         --environment "$CONTAINER_APP_ENV" \
-        --image "$FULL_IMAGE_NAME" \
+        --image "$ACR_LOGIN_SERVER/$FULL_IMAGE_NAME" \
         --registry-server "$ACR_LOGIN_SERVER" \
         --registry-username "$ACR_USERNAME" \
         --registry-password "$ACR_PASSWORD" \
