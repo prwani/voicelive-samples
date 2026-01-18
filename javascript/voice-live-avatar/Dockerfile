@@ -40,7 +40,7 @@ RUN tdnf distro-sync -y && \
 COPY --from=web /web/out /web/out
 COPY app.py /web/app.py
 
-RUN --mount=type=cache,target=/root/.cache/pip pip install aiohttp azure-identity "azure-ai-agents"
+RUN pip install --no-cache-dir aiohttp azure-identity "azure-ai-agents"
 
 WORKDIR /web
 
