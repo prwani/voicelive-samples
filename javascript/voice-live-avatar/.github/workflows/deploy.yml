@@ -1,0 +1,89 @@
+name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  RESOURCE_GROUP: voice-live-rg
+  LOCATION: eastus2
+  CONTAINER_APP_NAME: voice-live-avatar
+  CONTAINER_REGISTRY_NAME: voicelivereg  # Must be globally unique
+  CONTAINER_APP_ENV: voice-live-env
+  IMAGE_NAME: voice-live-avatar
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Get Azure Container Registry name
+      id: acr-info
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show \
+          --name ${{ env.CONTAINER_REGISTRY_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --query loginServer -o tsv)
+        echo "acr_login_server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+
+    - name: Login to Azure Container Registry
+      run: az acr login --name ${{ env.CONTAINER_REGISTRY_NAME }}
+
+    - name: Build and push Docker image
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+        ACR_LOGIN_SERVER: ${{ steps.acr-info.outputs.acr_login_server }}
+      run: |
+        FULL_IMAGE_NAME="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+        echo "Building image: $FULL_IMAGE_NAME"
+        
+        docker build -t $FULL_IMAGE_NAME .
+        docker push $FULL_IMAGE_NAME
+        
+        # Also tag as latest
+        docker tag $FULL_IMAGE_NAME ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest
+        docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest
+
+    - name: Deploy to Azure Container Apps
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+        ACR_LOGIN_SERVER: ${{ steps.acr-info.outputs.acr_login_server }}
+      run: |
+        FULL_IMAGE_NAME="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+        
+        az containerapp update \
+          --name ${{ env.CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --image $FULL_IMAGE_NAME
+
+    - name: Get application URL
+      id: get-url
+      run: |
+        APP_URL=$(az containerapp show \
+          --name ${{ env.CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --query properties.configuration.ingress.fqdn \
+          -o tsv)
+        echo "app_url=$APP_URL" >> $GITHUB_OUTPUT
+        echo "Application deployed to: https://$APP_URL"
+
+    - name: Deployment summary
+      run: |
+        echo "### Deployment Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Application URL:** https://${{ steps.get-url.outputs.app_url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Resource Group: ${{ env.RESOURCE_GROUP }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Container App: ${{ env.CONTAINER_APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Image Tag: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Commit: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY

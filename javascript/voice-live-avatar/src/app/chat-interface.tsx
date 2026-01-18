@@ -349,6 +349,10 @@ const availableVoices = [
     name: "DragonHDLatestNeural, Ava (HD)",
   },
   {
+    id: "en-IN-ArjunIndicNeural",
+    name: "IndicNeural, Arjun",
+  },
+  {
     id: "en-us-steffan:DragonHDLatestNeural",
     name: "DragonHDLatestNeural, Steffan (HD)",
   },
@@ -593,11 +597,13 @@ const ChatInterface = () => {
     Record<string, PredefinedScenario>
   >({});
   const [selectedScenario, setSelectedScenario] = useState<string>("");
+  const [role, setRole] = useState<"Azure Technical Architect" | "Collections Agent">("Azure Technical Architect");
   const [isSettings, setIsSettings] = useState(false);
 
   const referenceText = useRef<string>("");
   const audioChunksForPA = useRef<AudioChunksForPA[]>([]);
   const pauseDurations = useRef<number[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastPauseTimestamp = useRef<number | null>(null);
   const startRecordingTimestamp = useRef<number | null>(null);
 
@@ -619,6 +625,58 @@ const ChatInterface = () => {
   const settingsRef = useRef<HTMLDivElement>(null);
 
   const isEnableAvatar = isAvatar && (avatarName || photoAvatarName || customAvatarName);
+
+  // Role-specific configurations
+  const roleConfigs = {
+    "Azure Technical Architect": {
+      instructions: `You are AI interviewer who will ask 3 questions to the candidate on Azure cloud architecture. Ask one question at a time.
+The feedback or answers cannot be shared during the interview, so only ask questions and gather answers. 
+After the user answers all 3 questions are done, politely conclude the interview stating "Recruiter will revert to you with next steps."
+Here are the 3 questions - 1) What is the difference between availability zones and availability sets in Azure ?  2) What services will you use on Azure to build scalable web application 3) What were top 3 announcements of Ignite 2025 ?`,
+      feedbackPrompt: (transcript: string) => `You need to evaluate following interview transcript against the actual answers. The interview transcript contains the answers provided by Candidate (user) to the AI Interviewer(assistant). Start your feedback with "Recommendation" (in bold), followed by either "Hire" or "No-Hire" recommendation.
+----------------
+Interview transcript
+----------------
+${transcript}
+----------------
+
+----------------
+Expected answers 
+----------------
+1) What is the difference between Availability Zones and Availability Sets in Azure?
+Answer:
+Availability Sets protect against hardware and update domain failures within a single datacenter. Availability Zones protect against full datacenter outages by distributing resources across physically separate zones. Availability Sets are specific to VMs, while Availability Zones support broader Azure services. Zones provide a higher resiliency tier compared to Sets. Sets help with 99.95% SLA, while Zones support 99.99% SLA.
+
+
+2) What services will you use on Azure to build a scalable web application?
+Answer:
+You can use Azure App Service for fully managed web hosting with auto-scaling and global deployment. If you prefer event‑driven or serverless workloads, Azure Functions offers automatic scaling and low‑cost execution. For teams wanting vendor‑neutral or container‑based architectures, Azure Kubernetes Service (AKS) provides scalable orchestration with full control over containers. Additional components like Azure Front Door and managed databases further improve performance and resilience. The choice depends on your operational model—PaaS, serverless, or container‑based. 
+
+
+3) What were the top 3 announcements of Ignite 2025?
+Answer:
+The top three announcements were Agent365, FabricIQ, and FoundryIQ, marking Microsoft's shift toward an AI‑first enterprise stack. Agent365 introduced a unified environment to build, deploy, secure, and govern enterprise AI agents at scale. FabricIQ delivered next‑generation intelligent analytics and governance across the Microsoft Fabric platform. FoundryIQ introduced advanced AI-driven automation and workflow orchestration for enterprise processes. Together, these three represented Microsoft's core vision of autonomous, analytics‑driven, AI‑powered organizations.
+----------------`
+    },
+    "Collections Agent": {
+      instructions: `You are AI interviewer who will ask 3 questions to the candidate for a role of "collections agent". Ask one question at a time.
+The feedback or answers cannot be shared during the interview, so only ask questions and gather answers. 
+After 3 questions are done, politely conclude the interview stating "Recruiter will revert to you with next steps."
+Here are the 3 questions - 1) what is "DPD"  ? 2) What is "Bucket" 3) what is "settlement" ?.`,
+      feedbackPrompt: (transcript: string) => `You need to evaluate following interview transcript against the actual answers. The interview transcript contains the answers provided by Candidate (user) to the AI Interviewer(assistant).  Start your feedback with "Recommendation" (in bold), followed by either "Hire" or "No-Hire" recommendation.
+----------------
+Call transcript
+----------------
+${transcript}
+----------------
+
+----------------
+Expected answers 
+----------------
+1) DPD means “Days Past Due,” showing how long a payment is overdue. 2) Buckets categorize accounts by DPD ranges (e.g., 0–30, 31–60). 3) Settlement is a mutually agreed reduced payment to close the account.
+----------------`
+    }
+  };
 
   // Default instructions for foundry agent tools
   const defaultFoundryInstructions = "You are a helpful assistant with tools. Please response a short message like 'I am working on this', 'getting the information for you, please wait' before calling the function. The response can be varied based on the question.";
@@ -1576,6 +1634,108 @@ const ChatInterface = () => {
     }
   };
 
+  const downloadTranscript = () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `transcript-${timestamp}.txt`;
+    
+    // Filter out status messages and format the transcript
+    const transcript = messages
+      .filter(msg => msg.type === "user" || msg.type === "assistant")
+      .map(msg => {
+        const speaker = msg.type === "user" ? "User" : "Assistant";
+        return `${speaker}: ${msg.content}`;
+      })
+      .join("\n\n");
+    
+    // Create a blob and download it
+    const blob = new Blob([transcript], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
+  const [feedbackResult, setFeedbackResult] = useState<string>("");
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+
+  const generateFeedback = async () => {
+    setIsFeedbackDialogOpen(true);
+    setIsGeneratingFeedback(true);
+    setFeedbackResult("Generating feedback...");
+
+    try {
+      // Get the transcript
+      const transcript = messages
+        .filter(msg => msg.type === "user" || msg.type === "assistant")
+        .map(msg => {
+          const speaker = msg.type === "user" ? "User" : "Assistant";
+          return `${speaker}: ${msg.content}`;
+        })
+        .join("\n\n");
+
+      // Prepare the prompt based on selected role
+      const prompt = roleConfigs[role].feedbackPrompt(transcript);
+
+      // TODO: Replace with your actual API key and deployment name
+      const deploymentName = "gpt-5-mini"; // Update this with your actual deployment name
+      const endpoint = `https://pw-sea-foundry-resource.cognitiveservices.azure.com/openai/deployments/${deploymentName}/chat/completions?api-version=2025-04-01-preview`;
+
+      if (!apiKey || apiKey.trim() === "") {
+        throw new Error("API key not configured. Please enter your Subscription Key in the Connection Settings.");
+      }
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_completion_tokens: 4000,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error?.message) {
+            errorMessage += `\n\nError details: ${errorData.error.message}`;
+          }
+        } catch (e) {
+          if (errorText) {
+            errorMessage += `\n\nResponse: ${errorText.substring(0, 200)}`;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      const feedback = data.choices?.[0]?.message?.content || "No feedback generated.";
+      setFeedbackResult(feedback);
+    } catch (error) {
+      console.error("Error generating feedback:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      setFeedbackResult(`# Error Generating Feedback\n\n${errorMessage}\n\n## Troubleshooting Steps:\n\n1. **Check API Key**: Ensure you've replaced \`YOUR_API_KEY_HERE\` with your actual Azure OpenAI API key\n2. **Verify Deployment Name**: Make sure \`gpt-5-mini\` matches your Azure OpenAI deployment name\n3. **Check Endpoint**: Verify the endpoint URL matches your Azure resource\n4. **Review Permissions**: Ensure your API key has the necessary permissions\n5. **Check Console**: Open browser console (F12) for detailed error logs`);
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  };
+
   useEffect(() => {
     const initAudioHandler = async () => {
       const handler = new AudioHandler();
@@ -1771,6 +1931,214 @@ const ChatInterface = () => {
     setCustomSpeechModels(updatedModels);
   };
 
+  const exportConfiguration = () => {
+    const config = {
+      version: "1.0",
+      exportDate: new Date().toISOString(),
+      connection: {
+        endpoint,
+        apiKey,
+        entraToken,
+        model,
+        mode,
+      },
+      agent: {
+        agentId,
+        agentProjectName,
+        agentName,
+      },
+      voice: {
+        voiceType,
+        voiceName,
+        customVoiceName,
+        personalVoiceName,
+        personalVoiceModel,
+        voiceDeploymentId,
+        voiceSpeed,
+        voiceTemperature,
+      },
+      avatar: {
+        isAvatar,
+        isPhotoAvatar,
+        isCustomAvatar,
+        avatarName,
+        photoAvatarName,
+        customAvatarName,
+        avatarBackgroundImageUrl,
+        sceneZoom,
+        scenePositionX,
+        scenePositionY,
+        sceneRotationX,
+        sceneRotationY,
+        sceneRotationZ,
+        sceneAmplitude,
+      },
+      conversation: {
+        temperature,
+        instructions,
+        enableProactive,
+        turnDetectionType,
+        eouDetectionType,
+        removeFillerWords,
+        recognitionLanguage,
+        phraseList,
+        customSpeechModels,
+        useNS,
+        useEC,
+      },
+      search: {
+        enableSearch,
+        searchEndpoint,
+        searchApiKey,
+        searchIndex,
+        searchContentField,
+        searchIdentifierField,
+      },
+      tools: {
+        enablePA,
+        tools,
+        mcpServers,
+        foundryAgentTools,
+      },
+      selectedScenario,
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const date = new Date().toISOString().split("T")[0];
+    link.download = `voice-live-config-${date}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "status",
+        content: "Configuration exported successfully",
+      },
+    ]);
+  };
+
+  const importConfiguration = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const config = JSON.parse(e.target?.result as string);
+
+        // Apply connection settings
+        if (config.connection) {
+          if (config.connection.endpoint) setEndpoint(config.connection.endpoint);
+          if (config.connection.apiKey) setApiKey(config.connection.apiKey);
+          if (config.connection.entraToken) setEntraToken(config.connection.entraToken);
+          if (config.connection.model) setModel(config.connection.model);
+          if (config.connection.mode) setMode(config.connection.mode);
+        }
+
+        // Apply agent settings
+        if (config.agent) {
+          if (config.agent.agentId) setAgentId(config.agent.agentId);
+          if (config.agent.agentProjectName) setAgentProjectName(config.agent.agentProjectName);
+          if (config.agent.agentName) setAgentName(config.agent.agentName);
+        }
+
+        // Apply voice settings
+        if (config.voice) {
+          if (config.voice.voiceType) setVoiceType(config.voice.voiceType);
+          if (config.voice.voiceName) setVoiceName(config.voice.voiceName);
+          if (config.voice.customVoiceName) setCustomVoiceName(config.voice.customVoiceName);
+          if (config.voice.personalVoiceName) setPersonalVoiceName(config.voice.personalVoiceName);
+          if (config.voice.personalVoiceModel) setPersonalVoiceModel(config.voice.personalVoiceModel);
+          if (config.voice.voiceDeploymentId) setVoiceDeploymentId(config.voice.voiceDeploymentId);
+          if (config.voice.voiceSpeed !== undefined) setVoiceSpeed(config.voice.voiceSpeed);
+          if (config.voice.voiceTemperature !== undefined) setVoiceTemperature(config.voice.voiceTemperature);
+        }
+
+        // Apply avatar settings
+        if (config.avatar) {
+          if (config.avatar.isAvatar !== undefined) setIsAvatar(config.avatar.isAvatar);
+          if (config.avatar.isPhotoAvatar !== undefined) setIsPhotoAvatar(config.avatar.isPhotoAvatar);
+          if (config.avatar.isCustomAvatar !== undefined) setIsCustomAvatar(config.avatar.isCustomAvatar);
+          if (config.avatar.avatarName) setAvatarName(config.avatar.avatarName);
+          if (config.avatar.photoAvatarName) setPhotoAvatarName(config.avatar.photoAvatarName);
+          if (config.avatar.customAvatarName) setCustomAvatarName(config.avatar.customAvatarName);
+          if (config.avatar.avatarBackgroundImageUrl) setAvatarBackgroundImageUrl(config.avatar.avatarBackgroundImageUrl);
+          if (config.avatar.sceneZoom !== undefined) setSceneZoom(config.avatar.sceneZoom);
+          if (config.avatar.scenePositionX !== undefined) setScenePositionX(config.avatar.scenePositionX);
+          if (config.avatar.scenePositionY !== undefined) setScenePositionY(config.avatar.scenePositionY);
+          if (config.avatar.sceneRotationX !== undefined) setSceneRotationX(config.avatar.sceneRotationX);
+          if (config.avatar.sceneRotationY !== undefined) setSceneRotationY(config.avatar.sceneRotationY);
+          if (config.avatar.sceneRotationZ !== undefined) setSceneRotationZ(config.avatar.sceneRotationZ);
+          if (config.avatar.sceneAmplitude !== undefined) setSceneAmplitude(config.avatar.sceneAmplitude);
+        }
+
+        // Apply conversation settings
+        if (config.conversation) {
+          if (config.conversation.temperature !== undefined) setTemperature(config.conversation.temperature);
+          if (config.conversation.instructions) setInstructions(config.conversation.instructions);
+          if (config.conversation.enableProactive !== undefined) setEnableProactive(config.conversation.enableProactive);
+          if (config.conversation.turnDetectionType) setTurnDetectionType(config.conversation.turnDetectionType);
+          if (config.conversation.eouDetectionType) setEouDetectionType(config.conversation.eouDetectionType);
+          if (config.conversation.removeFillerWords !== undefined) setRemoveFillerWords(config.conversation.removeFillerWords);
+          if (config.conversation.recognitionLanguage) setRecognitionLanguage(config.conversation.recognitionLanguage);
+          if (config.conversation.phraseList) setPhraseList(config.conversation.phraseList);
+          if (config.conversation.customSpeechModels) setCustomSpeechModels(config.conversation.customSpeechModels);
+          if (config.conversation.useNS !== undefined) setUseNS(config.conversation.useNS);
+          if (config.conversation.useEC !== undefined) setUseEC(config.conversation.useEC);
+        }
+
+        // Apply search settings
+        if (config.search) {
+          if (config.search.enableSearch !== undefined) setEnableSearch(config.search.enableSearch);
+          if (config.search.searchEndpoint) setSearchEndpoint(config.search.searchEndpoint);
+          if (config.search.searchApiKey) setSearchApiKey(config.search.searchApiKey);
+          if (config.search.searchIndex) setSearchIndex(config.search.searchIndex);
+          if (config.search.searchContentField) setSearchContentField(config.search.searchContentField);
+          if (config.search.searchIdentifierField) setSearchIdentifierField(config.search.searchIdentifierField);
+        }
+
+        // Apply tools settings
+        if (config.tools) {
+          if (config.tools.enablePA !== undefined) setEnablePA(config.tools.enablePA);
+          if (config.tools.tools) setTools(config.tools.tools);
+          if (config.tools.mcpServers) setMcpServers(config.tools.mcpServers);
+          if (config.tools.foundryAgentTools) setFoundryAgentTools(config.tools.foundryAgentTools);
+        }
+
+        // Apply selected scenario
+        if (config.selectedScenario) setSelectedScenario(config.selectedScenario);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "status",
+            content: "Configuration imported successfully",
+          },
+        ]);
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "error",
+            content: `Failed to import configuration: ${error instanceof Error ? error.message : "Unknown error"}`,
+          },
+        ]);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset the input so the same file can be imported again
+    event.target.value = "";
+  };
+
   return (
     <div className="flex h-screen">
       {/* Parameters Panel */}
@@ -1828,6 +2196,37 @@ const ChatInterface = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Configuration Export/Import */}
+                <div className="space-y-2 p-3 border rounded-lg bg-blue-50/50">
+                  <label className="text-sm font-semibold text-gray-700">Configuration Management</label>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={exportConfiguration}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Export Config
+                    </Button>
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Import Config
+                    </Button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={importConfiguration}
+                    className="hidden"
+                  />
+                </div>
+
                 {/* Always show endpoint and subscription key */}
                 <Input
                   placeholder="Azure AI Services Endpoint"
@@ -1995,6 +2394,28 @@ const ChatInterface = () => {
                     )} */}
                   </div>
                 )}
+
+                {/* Role Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Role</label>
+                  <Select
+                    value={role}
+                    onValueChange={(value: "Azure Technical Architect" | "Collections Agent") => {
+                      setRole(value);
+                      // Always update instructions when role changes
+                      setInstructions(roleConfigs[value].instructions);
+                    }}
+                    disabled={isConnected}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Azure Technical Architect">Azure Technical Architect</SelectItem>
+                      <SelectItem value="Collections Agent">Collections Agent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 {/* Recognition Language selection - only show if cascaded/agent */}
                 {isCascaded(mode, model) && (
@@ -3072,6 +3493,31 @@ const ChatInterface = () => {
                 : "Connect"}
           </Button>
 
+          {messages.length > 0 && !isConnected && (
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={generateFeedback}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2"
+              >
+                <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path>
+                <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path>
+              </svg>
+              Generate Feedback
+            </Button>
+          )}
+
           {hasRecording && !isConnected && (
             <Button
               className="w-full"
@@ -3095,6 +3541,32 @@ const ChatInterface = () => {
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
               Download Recording
+            </Button>
+          )}
+
+          {messages.length > 0 && !isConnected && (
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={downloadTranscript}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download Transcript
             </Button>
           )}
         </div>
@@ -3267,6 +3739,35 @@ const ChatInterface = () => {
           </>
         )}
       </div>
+
+      {/* Feedback Dialog */}
+      <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
+        <DialogContent className="max-w-5xl w-full h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <DialogTitle className="text-xl font-semibold">Interview Feedback</DialogTitle>
+            <DialogDescription>
+              AI-generated evaluation of the interview transcript
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {isGeneratingFeedback ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-3">Generating feedback...</span>
+              </div>
+            ) : (
+              <div className="prose prose-sm md:prose-base lg:prose-lg max-w-none break-words whitespace-pre-wrap">
+                <ReactMarkdown>{feedbackResult}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="px-6 py-4 border-t">
+            <Button variant="outline" onClick={() => setIsFeedbackDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
