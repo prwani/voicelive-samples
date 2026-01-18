@@ -28,6 +28,10 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 # Optional: CNV Voice configuration (pass as build argument if needed)
 CNV_VOICE="${CNV_VOICE:-}"
 
+# Optional: AI Service Configuration for Managed Identity
+AI_SERVICE_ENDPOINT="${AI_SERVICE_ENDPOINT:-}"
+AZURE_FOUNDRY_PROJECT_NAME="${AZURE_FOUNDRY_PROJECT_NAME:-}"
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -191,14 +195,6 @@ print_header "Deploying Container App"
 if az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null; then
     print_info "Container app '$CONTAINER_APP_NAME' already exists. Updating..."
     
-    # Update with registry credentials to avoid authentication issues
-    UPDATE_CMD="az containerapp update \
-        --name \"$CONTAINER_APP_NAME\" \
-        --resource-group \"$RESOURCE_GROUP\" \
-        --image \"$FULL_IMAGE_NAME\" \
-        --set-env-vars VITE_CNV_VOICE=\"$CNV_VOICE\" \
-        --output none"
-    
     # Try update with registry credentials
     print_info "Updating container app with new image and credentials..."
     az containerapp registry set \
@@ -209,40 +205,107 @@ if az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE
         --password "$ACR_PASSWORD" \
         --output none || true
     
+    # Build environment variables
+    ENV_VARS="RETURN_CONFIGS=true"
+    if [ -n "$CNV_VOICE" ]; then
+        ENV_VARS="$ENV_VARS VITE_CNV_VOICE=$CNV_VOICE"
+    fi
+    if [ -n "$AI_SERVICE_ENDPOINT" ]; then
+        ENV_VARS="$ENV_VARS AI_SERVICE_ENDPOINT=$AI_SERVICE_ENDPOINT"
+    fi
+    if [ -n "$AZURE_FOUNDRY_PROJECT_NAME" ]; then
+        ENV_VARS="$ENV_VARS AZURE_FOUNDRY_PROJECT_NAME=$AZURE_FOUNDRY_PROJECT_NAME"
+    fi
+    
     az containerapp update \
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP" \
         --image "$FULL_IMAGE_NAME" \
+        --set-env-vars $ENV_VARS \
         --output none
     
     print_success "Container app updated"
 else
     print_info "Creating container app '$CONTAINER_APP_NAME'..."
     
-    CREATE_CMD="az containerapp create \
-        --name \"$CONTAINER_APP_NAME\" \
-        --resource-group \"$RESOURCE_GROUP\" \
-        --environment \"$CONTAINER_APP_ENV\" \
-        --image \"$FULL_IMAGE_NAME\" \
-        --registry-server \"$ACR_LOGIN_SERVER\" \
-        --registry-username \"$ACR_USERNAME\" \
-        --registry-password \"$ACR_PASSWORD\" \
+    # Build environment variables
+    ENV_VARS="RETURN_CONFIGS=true"
+    if [ -n "$CNV_VOICE" ]; then
+        ENV_VARS="$ENV_VARS VITE_CNV_VOICE=$CNV_VOICE"
+    fi
+    if [ -n "$AI_SERVICE_ENDPOINT" ]; then
+        ENV_VARS="$ENV_VARS AI_SERVICE_ENDPOINT=$AI_SERVICE_ENDPOINT"
+    fi
+    if [ -n "$AZURE_FOUNDRY_PROJECT_NAME" ]; then
+        ENV_VARS="$ENV_VARS AZURE_FOUNDRY_PROJECT_NAME=$AZURE_FOUNDRY_PROJECT_NAME"
+    fi
+    
+    az containerapp create \
+        --name "$CONTAINER_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --environment "$CONTAINER_APP_ENV" \
+        --image "$FULL_IMAGE_NAME" \
+        --registry-server "$ACR_LOGIN_SERVER" \
+        --registry-username "$ACR_USERNAME" \
+        --registry-password "$ACR_PASSWORD" \
         --target-port 3000 \
         --ingress external \
         --min-replicas 1 \
         --max-replicas 5 \
         --cpu 1.0 \
         --memory 2.0Gi \
-        --output none"
-    
-    # Add CNV_VOICE environment variable if provided
-    if [ -n "$CNV_VOICE" ]; then
-        CREATE_CMD="$CREATE_CMD --env-vars VITE_CNV_VOICE=\"$CNV_VOICE\""
-    fi
-    
-    eval "$CREATE_CMD"
+        --env-vars $ENV_VARS \
+        --output none
     
     print_success "Container app created"
+fi
+
+# ============================================================================
+# Enable Managed Identity
+# ============================================================================
+
+print_header "Configuring Managed Identity"
+
+print_info "Enabling system-assigned managed identity..."
+az containerapp identity assign \
+    --name "$CONTAINER_APP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --system-assigned \
+    --output none
+
+PRINCIPAL_ID=$(az containerapp identity show \
+    --name "$CONTAINER_APP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query principalId -o tsv)
+
+print_success "Managed Identity enabled with Principal ID: $PRINCIPAL_ID"
+
+# Grant Cognitive Services User role if AI_SERVICE_ENDPOINT is provided
+if [ -n "$AI_SERVICE_ENDPOINT" ]; then
+    print_info "Granting 'Cognitive Services User' role to managed identity..."
+    
+    # Extract resource name from endpoint (handles both regional and custom domain)
+    AI_RESOURCE_NAME=$(echo "$AI_SERVICE_ENDPOINT" | sed -E 's|https://([^.]+).*|\1|')
+    
+    # Try to find the AI service resource
+    AI_RESOURCE_ID=$(az cognitiveservices account list \
+        --query "[?name=='$AI_RESOURCE_NAME'].id" -o tsv 2>/dev/null | head -n 1)
+    
+    if [ -n "$AI_RESOURCE_ID" ]; then
+        az role assignment create \
+            --assignee "$PRINCIPAL_ID" \
+            --role "Cognitive Services User" \
+            --scope "$AI_RESOURCE_ID" \
+            --output none 2>/dev/null || print_info "Role assignment may already exist or need manual configuration"
+        
+        print_success "Role assignment completed"
+    else
+        print_info "Could not automatically find AI Service resource."
+        print_info "Please manually assign 'Cognitive Services User' role to Principal ID: $PRINCIPAL_ID"
+        echo "   Run: az role assignment create --assignee $PRINCIPAL_ID --role 'Cognitive Services User' --scope <AI_SERVICE_RESOURCE_ID>"
+    fi
+else
+    print_info "AI_SERVICE_ENDPOINT not set. Please manually assign roles to Principal ID: $PRINCIPAL_ID"
 fi
 
 # ============================================================================
@@ -267,6 +330,7 @@ echo "   - Location: $LOCATION"
 echo "   - Container App: $CONTAINER_APP_NAME"
 echo "   - Container Registry: $CONTAINER_REGISTRY_NAME"
 echo "   - Environment: $CONTAINER_APP_ENV"
+echo "   - Managed Identity Principal ID: $PRINCIPAL_ID"
 echo ""
 echo "📊 To view logs, run:"
 echo "   az containerapp logs show --name $CONTAINER_APP_NAME --resource-group $RESOURCE_GROUP --follow"
@@ -276,6 +340,12 @@ echo "   az containerapp update --name $CONTAINER_APP_NAME --resource-group $RES
 echo ""
 print_info "Next steps:"
 echo "   1. Open https://$APP_URL in your browser"
-echo "   2. Configure your Azure AI Services endpoint and subscription key"
-echo "   3. Enable avatar feature and start your conversation"
+if [ -z "$AI_SERVICE_ENDPOINT" ]; then
+echo "   2. Configure your Azure AI Services endpoint in the UI (or set AI_SERVICE_ENDPOINT env var)"
+echo "   3. The app will automatically use Managed Identity for authentication"
+else
+echo "   2. The app is configured to use AI Service: $AI_SERVICE_ENDPOINT"
+echo "   3. Authentication is automatic via Managed Identity (no keys needed)"
+fi
+echo "   4. Enable avatar feature and start your conversation"
 echo ""

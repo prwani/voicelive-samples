@@ -599,6 +599,9 @@ const ChatInterface = () => {
   const [selectedScenario, setSelectedScenario] = useState<string>("");
   const [role, setRole] = useState<"Azure Technical Architect" | "Collections Agent">("Azure Technical Architect");
   const [isSettings, setIsSettings] = useState(false);
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const [backgroundImageType, setBackgroundImageType] = useState<"none" | "idfcfirst" | "custom">("none");
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState("");
 
   const referenceText = useRef<string>("");
   const audioChunksForPA = useRef<AudioChunksForPA[]>([]);
@@ -1973,6 +1976,10 @@ Expected answers
         sceneRotationZ,
         sceneAmplitude,
       },
+      ui: {
+        backgroundImageType,
+        backgroundImageUrl,
+      },
       conversation: {
         temperature,
         instructions,
@@ -2116,6 +2123,12 @@ Expected answers
         // Apply selected scenario
         if (config.selectedScenario) setSelectedScenario(config.selectedScenario);
 
+        // Apply UI settings
+        if (config.ui) {
+          if (config.ui.backgroundImageType) setBackgroundImageType(config.ui.backgroundImageType);
+          if (config.ui.backgroundImageUrl) setBackgroundImageUrl(config.ui.backgroundImageUrl);
+        }
+
         setMessages((prev) => [
           ...prev,
           {
@@ -2143,7 +2156,7 @@ Expected answers
     <div className="flex h-screen">
       {/* Parameters Panel */}
       <div
-        className="w-80 bg-gray-50 p-4 flex flex-col border-r"
+        className={`bg-gray-50 p-4 flex flex-col border-r transition-all duration-300 ${isLeftPanelCollapsed ? 'w-0 p-0 overflow-hidden' : 'w-80'}`}
         ref={settingsRef}
       >
         <div className="flex-1 overflow-y-auto">
@@ -2395,27 +2408,29 @@ Expected answers
                   </div>
                 )}
 
-                {/* Role Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Role</label>
-                  <Select
-                    value={role}
-                    onValueChange={(value: "Azure Technical Architect" | "Collections Agent") => {
-                      setRole(value);
-                      // Always update instructions when role changes
-                      setInstructions(roleConfigs[value].instructions);
-                    }}
-                    disabled={isConnected}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Azure Technical Architect">Azure Technical Architect</SelectItem>
-                      <SelectItem value="Collections Agent">Collections Agent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Role Selection - only show when mode is set to "model" */}
+                {mode === "model" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Role</label>
+                    <Select
+                      value={role}
+                      onValueChange={(value: "Azure Technical Architect" | "Collections Agent") => {
+                        setRole(value);
+                        // Always update instructions when role changes
+                        setInstructions(roleConfigs[value].instructions);
+                      }}
+                      disabled={isConnected}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Azure Technical Architect">Azure Technical Architect</SelectItem>
+                        <SelectItem value="Collections Agent">Collections Agent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Recognition Language selection - only show if cascaded/agent */}
                 {isCascaded(mode, model) && (
@@ -3362,6 +3377,32 @@ Expected answers
                     />
                   </div>
                 )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Background Image</label>
+                  <Select
+                    value={backgroundImageType}
+                    onValueChange={(value: "none" | "idfcfirst" | "custom") => setBackgroundImageType(value)}
+                    disabled={isConnected}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="idfcfirst">IDFC First</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {backgroundImageType === "custom" && (
+                    <Input
+                      placeholder="Enter background image URL"
+                      value={backgroundImageUrl}
+                      onChange={(e) => setBackgroundImageUrl(e.target.value)}
+                      disabled={isConnected}
+                      className="mt-2"
+                    />
+                  )}
+                </div>
                 {isAvatar && isPhotoAvatar && (
                   <div className="space-y-4 mt-4">
                     <label className="text-sm font-medium">Scene Settings {isConnected && "(Live Adjustable)"}</label>
@@ -3572,7 +3613,40 @@ Expected answers
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-4">
+      {/* Toggle Button */}
+      <button
+        onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
+        className="fixed top-4 left-2 z-50 bg-white border border-gray-300 rounded-md p-2 hover:bg-gray-100 transition-colors shadow-md"
+        title={isLeftPanelCollapsed ? "Expand Settings" : "Collapse Settings"}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`transition-transform duration-300 ${isLeftPanelCollapsed ? 'rotate-180' : ''}`}
+        >
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+
+      <div 
+        className="flex flex-1 flex-col p-4"
+        style={{
+          backgroundImage: 
+            backgroundImageType === 'none' ? 'none' :
+            backgroundImageType === 'idfcfirst' ? 'url(/background-images/idfc-first.png)' :
+            backgroundImageType === 'custom' && backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           {/* Settings */}
@@ -3588,16 +3662,18 @@ Expected answers
           )}
 
           {/* Developer Mode */}
-          <div className="flex items-center">
-            <span className="developer-mode">Developer mode</span>
-            <Switch
-              checked={isDevelop}
-              onCheckedChange={(checked: boolean) => setIsDevelop(checked)}
-            />
-          </div>
+          {backgroundImageType === "none" && (
+            <div className="flex items-center">
+              <span className="developer-mode">Developer mode</span>
+              <Switch
+                checked={isDevelop}
+                onCheckedChange={(checked: boolean) => setIsDevelop(checked)}
+              />
+            </div>
+          )}
 
-          {/* Clear Chat */}
-          <div>
+          {/* Clear Chat - Always visible on the right */}
+          <div className="ml-auto">
             <button
               style={{ opacity: messages.length > 0 ? "" : "0.5" }}
               onClick={() => messages.length > 0 && setMessages([])}
@@ -3632,7 +3708,7 @@ Expected answers
               </>
             ))}
 
-          {(isDevelop || !isConnected) && (
+          {(isDevelop || !isConnected) && backgroundImageType === "none" && (
             <>
               {/* Chat Window */}
               <div className="flex flex-1 flex-col">
@@ -3687,7 +3763,7 @@ Expected answers
           <>
             {/* Record Button */}
             <div className="flex flex-1 justify-center items-center">
-              <div className="flex justify-center items-center recording-border">
+              <div className="flex justify-center items-center">
                 {isConnected && isEnableAvatar && isRecording && (
                   <div className="flex justify-center items-center sound-wave">
                     <div className="sound-wave-item" id="item-0"></div>
@@ -3705,18 +3781,16 @@ Expected answers
                 <Button
                   variant="outline"
                   onClick={toggleRecording}
-                  className={isRecording ? "bg-red-100" : ""}
+                  className={isRecording ? "bg-red-100 border-2" : "bg-blue-100 border-2 border-blue-400"}
                   disabled={!isConnected}
                 >
                   {isRecording ? (
                     <div className="flex justify-center items-center">
                       {recordingSvg()}
-                      <span className="microphone">Turn off microphone</span>
                     </div>
                   ) : (
                     <div className="flex justify-center items-center">
                       {offSvg()}
-                      <span className="microphone">Turn on microphone</span>
                     </div>
                   )}
                 </Button>
