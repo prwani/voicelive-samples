@@ -30,4 +30,6 @@ out/
 rt-client-*.tgz
 realtime-demo-*.tgz
 
+.env
+
 !src/lib/

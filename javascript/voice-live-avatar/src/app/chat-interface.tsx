@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { AudioHandler } from "@/lib/audio";
 import { ProactiveEventManager } from "@/lib/proactive-event-manager";
 import { int16PCMToFloat32, downsampleBuffer, float32ToInt16PCM } from "@/lib/audioConverters";
+import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { Power, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -71,6 +72,11 @@ interface ToolDeclaration {
 interface SystemToolDeclaration{
    type: string;
    description: string;
+}
+
+// Type guard to check if a tool is a ToolDeclaration
+function isToolDeclaration(tool: ToolDeclaration | SystemToolDeclaration): tool is ToolDeclaration {
+  return tool.type === "function" && "name" in tool;
 }
 
 interface PredefinedScenario {
@@ -218,6 +224,50 @@ const predefinedTools = [
         "Every time a user sends any message, this function should be called to handle the request.",
     } as ToolDeclaration,
     enabled: true,
+  },
+  {
+    id: "send_text_message",
+    label: "Send WhatsApp Payment Link",
+    tool: {
+      type: "function",
+      name: "send_text_message",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: {
+            type: "string",
+            description: "The phone number to send the payment link to in format +91-XXXXXXXXXX (e.g., '+91-7045289568')",
+          },
+        },
+        required: ["phone_number"],
+        additionalProperties: false,
+      },
+      description:
+        "Send a payment link via WhatsApp to the customer's phone number. Use this when the customer wants to make a payment now.",
+    } as ToolDeclaration,
+    enabled: false,
+  },
+  {
+    id: "check_payment_in_db",
+    label: "Check Payment Status",
+    tool: {
+      type: "function",
+      name: "check_payment_in_db",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: {
+            type: "string",
+            description: "The phone number to check payment status for in format +91-XXXXXXXXXX (e.g., '+91-7045289568')",
+          },
+        },
+        required: ["phone_number"],
+        additionalProperties: false,
+      },
+      description:
+        "Check if a payment record exists in the database for the given phone number. Use this to verify if a customer has already made a payment.",
+    } as ToolDeclaration,
+    enabled: false,
   },
 ];
 
@@ -597,11 +647,13 @@ const ChatInterface = () => {
     Record<string, PredefinedScenario>
   >({});
   const [selectedScenario, setSelectedScenario] = useState<string>("");
-  const [role, setRole] = useState<"Azure Technical Architect" | "Collections Agent">("Azure Technical Architect");
+  const [scenario, setScenario] = useState<"Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent">("Interview - Azure Technical Architect");
   const [isSettings, setIsSettings] = useState(false);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [backgroundImageType, setBackgroundImageType] = useState<"none" | "idfcfirst" | "custom">("none");
   const [backgroundImageUrl, setBackgroundImageUrl] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [normalizedPhoneNumber, setNormalizedPhoneNumber] = useState("");
 
   const referenceText = useRef<string>("");
   const audioChunksForPA = useRef<AudioChunksForPA[]>([]);
@@ -629,10 +681,11 @@ const ChatInterface = () => {
 
   const isEnableAvatar = isAvatar && (avatarName || photoAvatarName || customAvatarName);
 
-  // Role-specific configurations
-  const roleConfigs = {
-    "Azure Technical Architect": {
-      instructions: `You are AI interviewer who will ask 3 questions to the candidate on Azure cloud architecture. Ask one question at a time.
+  // Scenario-specific configurations - now a function to support dynamic phone numbers
+  const getScenarioConfig = (scenarioName: string, phone: string) => {
+    const configs: Record<string, { instructions: string; feedbackPrompt: (transcript: string) => string }> = {
+      "Interview - Azure Technical Architect": {
+        instructions: `You are AI interviewer who will ask 3 questions to the candidate on Azure cloud architecture. Ask one question at a time.
 The feedback or answers cannot be shared during the interview, so only ask questions and gather answers. 
 After the user answers all 3 questions are done, politely conclude the interview stating "Recruiter will revert to you with next steps."
 Here are the 3 questions - 1) What is the difference between availability zones and availability sets in Azure ?  2) What services will you use on Azure to build scalable web application 3) What were top 3 announcements of Ignite 2025 ?`,
@@ -661,7 +714,7 @@ Answer:
 The top three announcements were Agent365, FabricIQ, and FoundryIQ, marking Microsoft's shift toward an AI‑first enterprise stack. Agent365 introduced a unified environment to build, deploy, secure, and govern enterprise AI agents at scale. FabricIQ delivered next‑generation intelligent analytics and governance across the Microsoft Fabric platform. FoundryIQ introduced advanced AI-driven automation and workflow orchestration for enterprise processes. Together, these three represented Microsoft's core vision of autonomous, analytics‑driven, AI‑powered organizations.
 ----------------`
     },
-    "Collections Agent": {
+    "Interview - Collections Agent": {
       instructions: `You are AI interviewer who will ask 3 questions to the candidate for a role of "collections agent". Ask one question at a time.
 The feedback or answers cannot be shared during the interview, so only ask questions and gather answers. 
 After 3 questions are done, politely conclude the interview stating "Recruiter will revert to you with next steps."
@@ -678,11 +731,43 @@ Expected answers
 ----------------
 1) DPD means “Days Past Due,” showing how long a payment is overdue. 2) Buckets categorize accounts by DPD ranges (e.g., 0–30, 31–60). 3) Settlement is a mutually agreed reduced payment to close the account.
 ----------------`
-    }
+      },
+      "Insurance Premium Reminder Agent": {
+        instructions: `You are AI Agent and part of an life insurance company. You proactively call customers and help them complete their upcoming premium payments.
+Step 1 - Inform the customer that they have a premium payment due of Rs. 57,000 in next 30 days.
+Step 2 - Check if they want to make the payment now or later. If later, ask them for a specific date and time-slot for a callback.
+Step 3 - If they want to make a payment now, send a message to them using send_text_message function. IMPORTANT: Use the phone number "${phone}" when calling the send_text_message function.
+Step 4 - Wait for customer to confirm that they completed the payment.
+Step 5 - Verify that the payment is completed using check_payment_in_db function. IMPORTANT: Use the phone number "${phone}" when calling the check_payment_in_db function.
+Step 6 - Thank and conclude the conversation.
+Communication style - Be polite and concise. Keep your utterances short to 1-2 sentences only.`,
+        feedbackPrompt: (transcript: string) => `You need to evaluate the following call transcript.
+----------------
+Call transcript
+----------------
+${transcript}
+----------------`
+      }
+    };
+    return configs[scenarioName];
   };
 
   // Default instructions for foundry agent tools
   const defaultFoundryInstructions = "You are a helpful assistant with tools. Please response a short message like 'I am working on this', 'getting the information for you, please wait' before calling the function. The response can be varied based on the question.";
+
+  // Update normalized phone number when phoneNumber changes
+  useEffect(() => {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    setNormalizedPhoneNumber(normalized);
+  }, [phoneNumber]);
+
+  // Update instructions when phoneNumber changes for Insurance Premium scenario
+  useEffect(() => {
+    if (scenario === "Insurance Premium Reminder Agent") {
+      const config = getScenarioConfig(scenario, normalizedPhoneNumber);
+      setInstructions(config.instructions);
+    }
+  }, [normalizedPhoneNumber, scenario]);
 
   // Update instructions when foundry agent tools are added and instructions are empty
   useEffect(() => {
@@ -774,6 +859,19 @@ Expected answers
               }),
             }
           : { key: apiKey };
+        
+        // Validate endpoint is provided
+        if (!endpoint || endpoint.trim() === "") {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              type: "error",
+              content: "Please provide an endpoint URL.",
+            },
+          ]);
+          return;
+        }
+
         if (mode === "agent" && !agentId) {
           setMessages((prevMessages) => [
             ...prevMessages,
@@ -794,8 +892,24 @@ Expected answers
           ]);
           return;
         }
+        
+        // Validate and construct endpoint URL
+        let endpointUrl: URL;
+        try {
+          endpointUrl = new URL(endpoint);
+        } catch (error) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              type: "error",
+              content: `Invalid endpoint URL: "${endpoint}". Please check the endpoint format.`,
+            },
+          ]);
+          return;
+        }
+        
         clientRef.current = new RTClient(
-          new URL(endpoint),
+          endpointUrl,
           clientAuth.current,
           mode === "agent"
             ? {
@@ -1000,6 +1114,16 @@ Expected answers
       return undefined;
     }
 
+    let backgroundImageUrl: URL | undefined;
+    if (avatarBackgroundImageUrl) {
+      try {
+        backgroundImageUrl = new URL(avatarBackgroundImageUrl);
+      } catch (error) {
+        console.error(`Invalid avatar background image URL: "${avatarBackgroundImageUrl}"`, error);
+        backgroundImageUrl = undefined;
+      }
+    }
+
     const videoParams: AvatarConfigVideoParams = {
       codec: "h264",
       crop: {
@@ -1007,7 +1131,7 @@ Expected answers
         bottom_right: [1360, 1080],
       },
       background: {
-        image_url: avatarBackgroundImageUrl ? new URL(avatarBackgroundImageUrl) : undefined,
+        image_url: backgroundImageUrl,
       }
     };
 
@@ -1269,6 +1393,107 @@ Expected answers
           await clientRef.current?.generateResponse();
           referenceText.current = "";
           audioChunksForPA.current = [];
+        } else if (item.functionName === "send_text_message") {
+          const args = JSON.parse(item.arguments);
+          const phone_number = args.phone_number;
+          console.log("Sending WhatsApp message to:", phone_number);
+          
+          try {
+            setMessages((prevMessages) => [
+              ...prevMessages,
+              {
+                type: "status",
+                content: `Sending payment link to ${phone_number}...`,
+              },
+            ]);
+            
+            const response = await fetch("/api/send-whatsapp", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ phone_number }),
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              console.log("WhatsApp message sent successfully:", result.message);
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Successfully sent payment link to ${phone_number}`,
+                call_id: item.callId,
+              });
+            } else {
+              console.error("Failed to send WhatsApp message:", result.error);
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Failed to send payment link: ${result.error}`,
+                call_id: item.callId,
+              });
+            }
+            await clientRef.current?.generateResponse();
+          } catch (error) {
+            console.error("Error calling send-whatsapp API:", error);
+            await clientRef.current?.sendItem({
+              type: "function_call_output",
+              output: `Error sending payment link: ${error}`,
+              call_id: item.callId,
+            });
+            await clientRef.current?.generateResponse();
+          }
+        } else if (item.functionName === "check_payment_in_db") {
+          const args = JSON.parse(item.arguments);
+          const phone_number = args.phone_number;
+          console.log("Checking payment status for:", phone_number);
+          
+          try {
+            setMessages((prevMessages) => [
+              ...prevMessages,
+              {
+                type: "status",
+                content: `Checking payment status for ${phone_number}...`,
+              },
+            ]);
+            
+            const response = await fetch("/api/check-payment", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ phone_number }),
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              console.log("Payment check result:", result);
+              const outputMessage = result.found 
+                ? `Payment record found for ${phone_number}. Details: ${JSON.stringify(result.payment_details)}`
+                : `No payment records found for ${phone_number}.`;
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: outputMessage,
+                call_id: item.callId,
+              });
+            } else {
+              console.error("Failed to check payment status:", result.error);
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Failed to check payment status: ${result.error}`,
+                call_id: item.callId,
+              });
+            }
+            await clientRef.current?.generateResponse();
+          } catch (error) {
+            console.error("Error calling check-payment API:", error);
+            await clientRef.current?.sendItem({
+              type: "function_call_output",
+              output: `Error checking payment status: ${error}`,
+              call_id: item.callId,
+            });
+            await clientRef.current?.generateResponse();
+          }
         }
       } else if (isMCPCallItem(item)) {
         // Run MCP call processing in background to avoid blocking UI
@@ -1681,8 +1906,9 @@ Expected answers
         })
         .join("\n\n");
 
-      // Prepare the prompt based on selected role
-      const prompt = roleConfigs[role].feedbackPrompt(transcript);
+      // Prepare the prompt based on selected scenario
+      const config = getScenarioConfig(scenario, phoneNumber);
+      const prompt = config.feedbackPrompt(transcript);
 
       // TODO: Replace with your actual API key and deployment name
       const deploymentName = "gpt-5-mini"; // Update this with your actual deployment name
@@ -2408,25 +2634,44 @@ Expected answers
                   </div>
                 )}
 
-                {/* Role Selection - only show when mode is set to "model" */}
+                {/* Scenario Selection - only show when mode is set to "model" */}
                 {mode === "model" && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Role</label>
+                    <label className="text-sm font-medium">Scenario</label>
                     <Select
-                      value={role}
-                      onValueChange={(value: "Azure Technical Architect" | "Collections Agent") => {
-                        setRole(value);
-                        // Always update instructions when role changes
-                        setInstructions(roleConfigs[value].instructions);
+                      value={scenario}
+                      onValueChange={(value: "Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent") => {
+                        setScenario(value);
+                        // Always update instructions when scenario changes
+                        const config = getScenarioConfig(value, normalizedPhoneNumber);
+                        setInstructions(config.instructions);
+                        
+                        // Enable send_text_message and check_payment_in_db tools for Insurance Premium scenario
+                        if (value === "Insurance Premium Reminder Agent") {
+                          const sendTextTool = predefinedTools.find(t => t.id === "send_text_message");
+                          const checkPaymentTool = predefinedTools.find(t => t.id === "check_payment_in_db");
+                          let newTools = [...tools];
+                          if (sendTextTool && !tools.some(t => isToolDeclaration(t) && t.name === "send_text_message")) {
+                            newTools.push(sendTextTool.tool);
+                          }
+                          if (checkPaymentTool && !tools.some(t => isToolDeclaration(t) && t.name === "check_payment_in_db")) {
+                            newTools.push(checkPaymentTool.tool);
+                          }
+                          setTools(newTools);
+                        } else {
+                          // Remove send_text_message and check_payment_in_db tools for other scenarios
+                          setTools(tools.filter(t => !(isToolDeclaration(t) && (t.name === "send_text_message" || t.name === "check_payment_in_db"))));
+                        }
                       }}
                       disabled={isConnected}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder="Select scenario" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Azure Technical Architect">Azure Technical Architect</SelectItem>
-                        <SelectItem value="Collections Agent">Collections Agent</SelectItem>
+                        <SelectItem value="Interview - Azure Technical Architect">Interview - Azure Technical Architect</SelectItem>
+                        <SelectItem value="Interview - Collections Agent">Interview - Collections Agent</SelectItem>
+                        <SelectItem value="Insurance Premium Reminder Agent">Insurance Premium Reminder Agent</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -3515,6 +3760,29 @@ Expected answers
                 )}
               </AccordionContent>
             </AccordionItem>
+            {/* Additional Settings */}
+            <AccordionItem value="additional">
+              <AccordionTrigger className="text-lg font-semibold">
+                Additional Settings
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Phone Number</label>
+                  <Input
+                    placeholder="+91-1234567890 or 1234567890"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    disabled={isConnected}
+                  />
+                  {phoneNumber && normalizedPhoneNumber && (
+                    <p className="text-xs text-gray-500">Will be used as: {normalizedPhoneNumber}</p>
+                  )}
+                  {phoneNumber && !normalizedPhoneNumber && (
+                    <p className="text-xs text-red-500">Invalid phone number (need at least 10 digits)</p>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
         </div>
 
@@ -3534,7 +3802,7 @@ Expected answers
                 : "Connect"}
           </Button>
 
-          {messages.length > 0 && !isConnected && (
+          {messages.length > 0 && !isConnected && scenario.startsWith("Interview") && (
             <Button
               className="w-full"
               variant="outline"

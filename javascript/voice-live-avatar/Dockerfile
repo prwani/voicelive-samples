@@ -39,11 +39,26 @@ RUN tdnf distro-sync -y && \
 
 COPY --from=web /web/out /web/out
 COPY app.py /web/app.py
+COPY payment_api.py /web/payment_api.py
+COPY db_init.py /web/db_init.py
+COPY functions.py /web/functions.py
+COPY phone_utils.py /web/phone_utils.py
+COPY payment.html /web/payment.html
+COPY view.html /web/view.html
+COPY requirements.txt /web/requirements.txt
 
-RUN pip install --no-cache-dir aiohttp azure-identity "azure-ai-agents"
+# Install Python dependencies from requirements.txt with pinned versions
+# Note: Skip pip upgrade as it's managed by rpm in Azure Linux base image
+RUN pip install --no-cache-dir --default-timeout=100 --retries 5 -r /web/requirements.txt
+
+# Initialize the database
+RUN python3 /web/db_init.py
+
+# Set Python to unbuffered mode for real-time log output
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /web
 
 EXPOSE 3000
 
-ENTRYPOINT [ "python3", "app.py" ]
+ENTRYPOINT [ "python3", "-u", "app.py" ]

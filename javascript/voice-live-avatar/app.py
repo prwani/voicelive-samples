@@ -1,11 +1,18 @@
 import argparse
 import json
 import os
+import sqlite3
+from dotenv import load_dotenv
 
 from aiohttp import web
 from azure.ai.agents.aio import AgentsClient
 from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
 import logging
+from payment_api import submit_payment, get_payments
+from functions import send_text_message, check_payment_in_db
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +31,19 @@ async def index(request):
 
 
 async def static(request):
-    return web.FileResponse("out/" + request.match_info["path_info"])
+    from pathlib import Path
+    file_path = "out/" + request.match_info["path_info"]
+    if not Path(file_path).exists():
+        raise web.HTTPNotFound()
+    return web.FileResponse(file_path)
+
+
+async def payment_page(request):
+    return web.FileResponse("payment.html")
+
+
+async def view_page(request):
+    return web.FileResponse("view.html")
 
 
 casual_interaction = """You are Zara, a human-like AI character developed by Contoso Company in 2025.
@@ -444,10 +463,107 @@ async def config(request):
     return web.Response(text=json.dumps(config))
 
 
+async def send_whatsapp_message(request):
+    """API endpoint to send WhatsApp payment link"""
+    try:
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        
+        if not phone_number:
+            return web.Response(
+                text=json.dumps({"success": False, "error": "phone_number is required"}),
+                status=400,
+                content_type="application/json"
+            )
+        
+        # Get the base URL from the request
+        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+        host = request.headers.get('X-Forwarded-Host', request.host)
+        base_url = f"{scheme}://{host}"
+        
+        # Call the function to send WhatsApp message
+        send_text_message(phone_number, base_url)
+        
+        return web.Response(
+            text=json.dumps({"success": True, "message": f"Payment link sent to {phone_number}"}),
+            status=200,
+            content_type="application/json"
+        )
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp message: {e}")
+        return web.Response(
+            text=json.dumps({"success": False, "error": str(e)}),
+            status=500,
+            content_type="application/json"
+        )
+
+
+async def check_payment_status(request):
+    """API endpoint to check payment status for a phone number"""
+    try:
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        
+        if not phone_number:
+            return web.Response(
+                text=json.dumps({"success": False, "error": "phone_number is required"}),
+                status=400,
+                content_type="application/json"
+            )
+        
+        # Call the function to check payment in database
+        result = check_payment_in_db(phone_number)
+        
+        return web.Response(
+            text=json.dumps({"success": True, **result}),
+            status=200,
+            content_type="application/json"
+        )
+    except Exception as e:
+        logger.error(f"Error checking payment status: {e}")
+        return web.Response(
+            text=json.dumps({"success": False, "error": str(e)}),
+            status=500,
+            content_type="application/json"
+        )
+
+
+async def reset_payments(request):
+    """API endpoint to reset/truncate all payment records"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM customer_payment_details')
+        conn.commit()
+        deleted_count = cursor.rowcount
+        conn.close()
+        
+        logger.info(f"Reset payments: deleted {deleted_count} records")
+        return web.Response(
+            text=json.dumps({"success": True, "message": f"Deleted {deleted_count} payment records"}),
+            status=200,
+            content_type="application/json"
+        )
+    except Exception as e:
+        logger.error(f"Error resetting payments: {e}")
+        return web.Response(
+            text=json.dumps({"success": False, "error": str(e)}),
+            status=500,
+            content_type="application/json"
+        )
+
+
 app = web.Application()
 app.router.add_get("/", index)
-app.router.add_get("/{path_info:.*}", static)
+app.router.add_get("/payment", payment_page)
+app.router.add_get("/view", view_page)
+app.router.add_post("/api/payment", submit_payment)
+app.router.add_get("/api/payments", get_payments)
+app.router.add_post("/api/payments/reset", reset_payments)
+app.router.add_post("/api/send-whatsapp", send_whatsapp_message)
+app.router.add_post("/api/check-payment", check_payment_status)
 app.router.add_get("/config", config)
+app.router.add_get("/{path_info:.*}", static)
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument("--port", type=int, default=3000, help="Port to run the app on")

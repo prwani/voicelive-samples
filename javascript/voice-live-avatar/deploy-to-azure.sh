@@ -13,6 +13,18 @@
 set -e  # Exit on error
 
 # ============================================================================
+# Load .env file if present
+# ============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    echo "📄 Loading environment variables from .env file..."
+    set -a  # automatically export all variables
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
+# ============================================================================
 # Configuration Variables
 # ============================================================================
 
@@ -31,6 +43,10 @@ CNV_VOICE="${CNV_VOICE:-}"
 # Optional: AI Service Configuration for Managed Identity
 AI_SERVICE_ENDPOINT="${AI_SERVICE_ENDPOINT:-}"
 AZURE_FOUNDRY_PROJECT_NAME="${AZURE_FOUNDRY_PROJECT_NAME:-}"
+
+# Optional: Azure Communication Services Configuration
+COMMUNICATION_SERVICES_CONNECTION_STRING="${COMMUNICATION_SERVICES_CONNECTION_STRING:-}"
+WHATSAPP_CHANNEL_ID="${WHATSAPP_CHANNEL_ID:-}"
 
 # ============================================================================
 # Helper Functions
@@ -210,6 +226,12 @@ if az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE
     if [ -n "$AZURE_FOUNDRY_PROJECT_NAME" ]; then
         ENV_VARS="$ENV_VARS AZURE_FOUNDRY_PROJECT_NAME=$AZURE_FOUNDRY_PROJECT_NAME"
     fi
+    if [ -n "$COMMUNICATION_SERVICES_CONNECTION_STRING" ]; then
+        ENV_VARS="$ENV_VARS COMMUNICATION_SERVICES_CONNECTION_STRING=$COMMUNICATION_SERVICES_CONNECTION_STRING"
+    fi
+    if [ -n "$WHATSAPP_CHANNEL_ID" ]; then
+        ENV_VARS="$ENV_VARS WHATSAPP_CHANNEL_ID=$WHATSAPP_CHANNEL_ID"
+    fi
     
     az containerapp update \
         --name "$CONTAINER_APP_NAME" \
@@ -232,6 +254,12 @@ else
     fi
     if [ -n "$AZURE_FOUNDRY_PROJECT_NAME" ]; then
         ENV_VARS="$ENV_VARS AZURE_FOUNDRY_PROJECT_NAME=$AZURE_FOUNDRY_PROJECT_NAME"
+    fi
+    if [ -n "$COMMUNICATION_SERVICES_CONNECTION_STRING" ]; then
+        ENV_VARS="$ENV_VARS COMMUNICATION_SERVICES_CONNECTION_STRING=$COMMUNICATION_SERVICES_CONNECTION_STRING"
+    fi
+    if [ -n "$WHATSAPP_CHANNEL_ID" ]; then
+        ENV_VARS="$ENV_VARS WHATSAPP_CHANNEL_ID=$WHATSAPP_CHANNEL_ID"
     fi
     
     az containerapp create \

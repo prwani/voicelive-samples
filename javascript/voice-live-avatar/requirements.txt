@@ -1,0 +1,39 @@
+# ============================================================================
+# Python Dependencies for Voice Live Avatar Application
+# ============================================================================
+# This file lists ALL external dependencies needed by the Python files
+# in this Docker container. Keep versions pinned for reproducible builds.
+#
+# Files analyzed:
+#   - app.py: Main web server (aiohttp, azure-identity, azure-ai-agents)
+#   - payment_api.py: Payment API handlers (aiohttp only)
+#   - functions.py: WhatsApp messaging (azure-communication-messages)
+#   - db_init.py: Database initialization (sqlite3 - stdlib)
+# ============================================================================
+
+# Web framework - used by app.py and payment_api.py
+aiohttp==3.9.5
+
+# Azure Identity and Authentication - used by app.py
+azure-identity==1.16.0
+
+# Azure AI Agents SDK - used by app.py
+azure-ai-agents==1.1.0
+
+# Environment variable management - used by app.py
+python-dotenv==1.0.1
+
+# Azure Communication Services - used by functions.py
+azure-communication-messages==1.0.0
+azure-communication-identity==1.5.0
+
+# ============================================================================
+# Standard Library Modules (no installation needed, listed for documentation)
+# ============================================================================
+# argparse - CLI argument parsing (app.py)
+# json - JSON handling (app.py, payment_api.py)
+# os - OS interface (all files)
+# logging - Logging (app.py)
+# sqlite3 - Database (payment_api.py, db_init.py)
+# random - Random generation (payment_api.py)
+# datetime - Date/time handling (payment_api.py)

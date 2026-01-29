@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contoso Insurance - Premium Payment</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            color: #0d47a1;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #1976d2;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            background-color: #f5f5f5;
+            color: #666;
+        }
+
+        .amount-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .amount-group .input {
+            flex: 1;
+        }
+
+        .gst-label {
+            font-size: 14px;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .button {
+            width: 100%;
+            padding: 14px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .button:hover:not(:disabled) {
+            background-color: #1565c0;
+        }
+
+        .button:disabled {
+            background-color: #90caf9;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.success {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+            border: 1px solid #81c784;
+        }
+
+        .message.error {
+            background-color: #ffcdd2;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+
+        .message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1 class="title">Contoso Insurance</h1>
+            <p class="subtitle">Premium Payment</p>
+        </div>
+
+        <div class="form-group">
+            <label class="label" for="policyNumber">Policy Number</label>
+            <input type="text" id="policyNumber" class="input" readonly>
+        </div>
+
+        <div class="form-group">
+            <label class="label" for="phone">Phone Number</label>
+            <input type="text" id="phone" class="input" readonly>
+        </div>
+
+        <div class="form-group">
+            <label class="label" for="amount">Amount Due</label>
+            <div class="amount-group">
+                <input type="text" id="amount" class="input" value="Rs. 57,371" readonly>
+                <span class="gst-label">Including GST</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="label" for="dueDate">Due Date</label>
+            <input type="text" id="dueDate" class="input" readonly>
+        </div>
+
+        <button id="payBtn" class="button">Complete Payment</button>
+
+        <div id="message" class="message"></div>
+    </div>
+
+    <script>
+        // Generate a random policy number
+        function generatePolicyNumber() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let randomPart = '';
+            for (let i = 0; i < 8; i++) {
+                randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return 'POL-' + randomPart;
+        }
+
+        // Phone number normalization utility
+        function normalizePhoneNumber(phoneNumber) {
+            if (!phoneNumber) {
+                return "";
+            }
+
+            // Remove all non-digit characters to get just the numbers
+            const digitsOnly = phoneNumber.replace(/\D/g, "");
+
+            // Extract the last 10 digits (the actual phone number)
+            let last10Digits = "";
+            
+            if (digitsOnly.length === 10) {
+                // Just 10 digits provided
+                last10Digits = digitsOnly;
+            } else if (digitsOnly.length >= 11) {
+                // 11+ digits provided, take last 10
+                last10Digits = digitsOnly.slice(-10);
+            } else {
+                // Less than 10 digits, invalid
+                return "";
+            }
+
+            // Return in the format +91-XXXXXXXXXX
+            return `+91-${last10Digits}`;
+        }
+
+        // Get parameters from query string
+        const urlParams = new URLSearchParams(window.location.search);
+        const policyNumber = urlParams.get('policy') || generatePolicyNumber();
+        const phoneNumberRaw = urlParams.get('phone') || '';
+        const phoneNumber = normalizePhoneNumber(phoneNumberRaw);
+        document.getElementById('policyNumber').value = policyNumber;
+        document.getElementById('phone').value = phoneNumber;
+
+        // Calculate due date (10 days from today)
+        const today = new Date();
+        today.setDate(today.getDate() + 10);
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+        document.getElementById('dueDate').value = `${day}/${month}/${year}`;
+
+        // Handle payment button click
+        document.getElementById('payBtn').addEventListener('click', async function() {
+            const button = this;
+            const messageEl = document.getElementById('message');
+            
+            button.disabled = true;
+            button.textContent = 'Processing...';
+            messageEl.classList.remove('show', 'success', 'error');
+
+            try {
+                const response = await fetch('/api/payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        policy_number: policyNumber,
+                        phone_number: phoneNumber,
+                        amount_due: 57371,
+                        payment_date: new Date().toISOString().split('T')[0]
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    messageEl.textContent = 'Payment successful!';
+                    messageEl.classList.add('success', 'show');
+                } else {
+                    messageEl.textContent = `Error: ${data.error || 'Payment failed'}`;
+                    messageEl.classList.add('error', 'show');
+                }
+            } catch (error) {
+                messageEl.textContent = `Error: ${error.message || 'Payment failed'}`;
+                messageEl.classList.add('error', 'show');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Complete Payment';
+            }
+        });
+    </script>
+</body>
+</html>
