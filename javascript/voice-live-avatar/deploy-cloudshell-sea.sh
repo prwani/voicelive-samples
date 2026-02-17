@@ -45,7 +45,7 @@ IMAGE_NAME="voice-live-avatar"
 
 # Foundry Resource Configuration
 FOUNDRY_SUBSCRIPTION="default"  # Will use current subscription
-FOUNDRY_RESOURCE_GROUP="pw-sea-foundry-resource"
+FOUNDRY_RESOURCE_GROUP="rg-ai-sea"
 FOUNDRY_PROJECT_NAME="pw-sea-foundry"
 
 ####################################################################
