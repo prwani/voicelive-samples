@@ -2020,28 +2020,18 @@ Expected answers
       const config = getScenarioConfig(scenario, phoneNumber);
       const prompt = config.feedbackPrompt(transcript);
 
-      // TODO: Replace with your actual API key and deployment name
-      const deploymentName = "gpt-5-mini"; // Update this with your actual deployment name
-      const endpoint = `https://pw-sea-foundry-resource.cognitiveservices.azure.com/openai/deployments/${deploymentName}/chat/completions?api-version=2025-04-01-preview`;
-
-      if (!apiKey || apiKey.trim() === "") {
-        throw new Error("API key not configured. Please enter your Subscription Key in the Connection Settings.");
-      }
-
-      const response = await fetch(endpoint, {
+      // Call backend /api/feedback endpoint which uses DefaultAzureCredential
+      // Use relative URL since frontend is served from the same origin as the backend
+      const feedbackApiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+      const response = await fetch(`${feedbackApiBase}/api/feedback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "api-key": apiKey,
         },
         body: JSON.stringify({
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          max_completion_tokens: 4000,
+          prompt,
+          deploymentName: "gpt-5-mini",
+          maxTokens: 4000,
         }),
       });
 
@@ -2051,8 +2041,8 @@ Expected answers
         
         try {
           const errorData = JSON.parse(errorText);
-          if (errorData.error?.message) {
-            errorMessage += `\n\nError details: ${errorData.error.message}`;
+          if (errorData.error) {
+            errorMessage += `\n\nError details: ${typeof errorData.error === 'string' ? errorData.error : errorData.details || JSON.stringify(errorData.error)}`;
           }
         } catch (e) {
           if (errorText) {
@@ -2064,12 +2054,12 @@ Expected answers
       }
 
       const data = await response.json();
-      const feedback = data.choices?.[0]?.message?.content || "No feedback generated.";
+      const feedback = data.feedback || "No feedback generated.";
       setFeedbackResult(feedback);
     } catch (error) {
       console.error("Error generating feedback:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      setFeedbackResult(`# Error Generating Feedback\n\n${errorMessage}\n\n## Troubleshooting Steps:\n\n1. **Check API Key**: Ensure you've replaced \`YOUR_API_KEY_HERE\` with your actual Azure OpenAI API key\n2. **Verify Deployment Name**: Make sure \`gpt-5-mini\` matches your Azure OpenAI deployment name\n3. **Check Endpoint**: Verify the endpoint URL matches your Azure resource\n4. **Review Permissions**: Ensure your API key has the necessary permissions\n5. **Check Console**: Open browser console (F12) for detailed error logs`);
+      setFeedbackResult(`# Error Generating Feedback\n\n${errorMessage}\n\n## Troubleshooting Steps:\n\n1. **Check Backend Logs**: Review the Python backend logs for authentication errors\n2. **Verify Managed Identity**: Ensure the Container App's managed identity has "Cognitive Services OpenAI User" role\n3. **Verify Deployment Name**: Make sure \`gpt-5-mini\` exists as a deployment in your Foundry resource\n4. **Check Console**: Open browser console (F12) for detailed error logs`);
     } finally {
       setIsGeneratingFeedback(false);
     }

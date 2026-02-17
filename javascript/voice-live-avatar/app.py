@@ -4,6 +4,7 @@ import os
 import sqlite3
 from dotenv import load_dotenv
 
+import aiohttp
 from aiohttp import web
 from azure.ai.agents.aio import AgentsClient
 from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
@@ -553,6 +554,63 @@ async def reset_payments(request):
         )
 
 
+async def generate_feedback(request):
+    """Proxy feedback requests to Azure OpenAI using managed identity (DefaultAzureCredential)."""
+    try:
+        body = await request.json()
+        prompt = body.get("prompt", "")
+        deployment_name = body.get("deploymentName", "gpt-5-mini")
+        max_tokens = body.get("maxTokens", 4000)
+
+        if not prompt:
+            return web.Response(
+                text=json.dumps({"error": "prompt is required"}),
+                status=400,
+                content_type="application/json"
+            )
+
+        # Get a bearer token using DefaultAzureCredential
+        token = get_token()
+
+        # Call Azure OpenAI API with bearer token auth
+        endpoint = f"{AI_SERVICE_ENDPOINT}openai/deployments/{deployment_name}/chat/completions?api-version=2025-04-01-preview"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                endpoint,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}",
+                },
+                json={
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_completion_tokens": max_tokens,
+                },
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"Azure OpenAI feedback request failed: {resp.status} {error_text}")
+                    return web.Response(
+                        text=json.dumps({"error": f"Azure OpenAI request failed: {resp.status}", "details": error_text}),
+                        status=resp.status,
+                        content_type="application/json"
+                    )
+                data = await resp.json()
+                feedback = data.get("choices", [{}])[0].get("message", {}).get("content", "No feedback generated.")
+                return web.Response(
+                    text=json.dumps({"feedback": feedback}),
+                    status=200,
+                    content_type="application/json"
+                )
+    except Exception as e:
+        logger.error(f"Error generating feedback: {e}")
+        return web.Response(
+            text=json.dumps({"error": str(e)}),
+            status=500,
+            content_type="application/json"
+        )
+
+
 app = web.Application()
 app.router.add_get("/", index)
 app.router.add_get("/payment", payment_page)
@@ -562,6 +620,7 @@ app.router.add_get("/api/payments", get_payments)
 app.router.add_post("/api/payments/reset", reset_payments)
 app.router.add_post("/api/send-whatsapp", send_whatsapp_message)
 app.router.add_post("/api/check-payment", check_payment_status)
+app.router.add_post("/api/feedback", generate_feedback)
 app.router.add_get("/config", config)
 app.router.add_get("/{path_info:.*}", static)
 
