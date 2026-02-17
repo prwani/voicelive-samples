@@ -15,8 +15,10 @@ RUN npm pack
 FROM mcr.microsoft.com/azurelinux/base/nodejs:20 AS web
 
 ARG CNV_VOICE
+ARG NEXT_PUBLIC_API_BASE
 
 ENV VITE_CNV_VOICE=$CNV_VOICE
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 
 RUN tdnf distro-sync -y && \
     tdnf install -y jq && \
@@ -59,6 +61,6 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /web
 
-EXPOSE 3000
+EXPOSE 3333
 
 ENTRYPOINT [ "python3", "-u", "app.py" ]

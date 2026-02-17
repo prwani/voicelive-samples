@@ -269,6 +269,28 @@ const predefinedTools = [
     } as ToolDeclaration,
     enabled: false,
   },
+  {
+    id: "submit_loan_application",
+    label: "Submit Loan Application",
+    tool: {
+      type: "function",
+      name: "submit_loan_application",
+      parameters: {
+        type: "object",
+        properties: {
+          date_of_birth: {
+            type: "string",
+            description: "The customer's date of birth for verification",
+          },
+        },
+        required: ["date_of_birth"],
+        additionalProperties: false,
+      },
+      description:
+        "Submit a loan application after collecting the customer's date of birth. This will register the application request in the system.",
+    } as ToolDeclaration,
+    enabled: false,
+  },
 ];
 
 // Helper to map message type to class names.
@@ -297,18 +319,25 @@ const readme = `
         - The endpoint can be the regional endpoint (e.g., \`https://<region>.api.cognitive.microsoft.com/\`) or a custom domain endpoint (e.g., \`https://<custom-domain>.cognitiveservices.azure.com/\`).
         - The resource must be in the \`eastus2\` or \`swedencentral\` region. Other regions are not supported.
 
-    2. **(Optional) Set the Agent**
+    2. **Authentication (Automatic)**
+        - Authentication is automatic using Azure Credentials:
+          - **Local Development**: Uses your logged-in Azure CLI user (\`az login\`)
+          - **Container Apps**: Uses the container's managed identity
+          - **Other Environments**: Uses service principal credentials from environment variables
+        - Optional API Key fallback for non-Azure environments
+        - Avatars are fully supported with all authentication methods.
+    
+    3. **(Optional) Set the Agent**
         - Set the project name and agent ID to connect to a specific agent.
-        - Entra ID auth is required for agent mode, use \`az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv\` to get the token.
 
-    2. **Select noise suppression or echo cancellation**
+    4. **Select noise suppression or echo cancellation**
         - Enable noise suppression and/or echo cancellation to improve audio quality.
 
-    3. **Select the Turn Detection**
+    5. **Select the Turn Detection**
         - Choose the desired turn detection method. The default is \`Server VAD\`, which uses server-side voice activity detection.
         - The \`Azure Semantic VAD\` option is also available for better performance.
 
-    4. **Select the Voice**
+    6. **Select the Voice**
        - Choose the desired voice from the list.
        - If using a custom voice, select the "Use Custom Voice" option and enter the Voice Deployment ID and the custom voice name.
 
@@ -556,7 +585,7 @@ let intervalId: NodeJS.Timeout | null = null;
 const ChatInterface = () => {
   const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
-  const [entraToken, setEntraToken] = useState("");
+  const [autoToken, setAutoToken] = useState(""); // Auto-fetched token from backend
   const clientAuth = useRef<
     | {
         getToken: (_: string) => Promise<{
@@ -647,7 +676,7 @@ const ChatInterface = () => {
     Record<string, PredefinedScenario>
   >({});
   const [selectedScenario, setSelectedScenario] = useState<string>("");
-  const [scenario, setScenario] = useState<"Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent">("Interview - Azure Technical Architect");
+  const [scenario, setScenario] = useState<"Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent" | "Loan Lead Qualification">("Interview - Azure Technical Architect");
   const [isSettings, setIsSettings] = useState(false);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [backgroundImageType, setBackgroundImageType] = useState<"none" | "idfcfirst" | "custom">("none");
@@ -734,20 +763,36 @@ Expected answers
       },
       "Insurance Premium Reminder Agent": {
         instructions: `You are AI Agent and part of an life insurance company. You proactively call customers and help them complete their upcoming premium payments.
-Step 1 - Inform the customer that they have a premium payment due of Rs. 57,000 in next 30 days.
-Step 2 - Check if they want to make the payment now or later. If later, ask them for a specific date and time-slot for a callback.
-Step 3 - If they want to make a payment now, send a message to them using send_text_message function. IMPORTANT: Use the phone number "${phone}" when calling the send_text_message function.
-Step 4 - Wait for customer to confirm that they completed the payment.
-Step 5 - Verify that the payment is completed using check_payment_in_db function. IMPORTANT: Use the phone number "${phone}" when calling the check_payment_in_db function.
-Step 6 - Thank and conclude the conversation.
-Communication style - Be polite and concise. Keep your utterances short to 1-2 sentences only.`,
-        feedbackPrompt: (transcript: string) => `You need to evaluate the following call transcript.
-----------------
-Call transcript
-----------------
-${transcript}
-----------------`
-      }
+      Step 1 - Inform the customer that they have a premium payment due of Rs. 57,000 in next 30 days.
+      Step 2 - Check if they want to make the payment now or later. If later, ask them for a specific date and time-slot for a callback.
+      Step 3 - If they want to make a payment now, send a message to them using send_text_message function. IMPORTANT: Use the phone number "${phone}" when calling the send_text_message function.
+      Step 4 - Wait for customer to confirm that they completed the payment.
+      Step 5 - Verify that the payment is completed using check_payment_in_db function. IMPORTANT: Use the phone number "${phone}" when calling the check_payment_in_db function.
+      Step 6 - Thank and conclude the conversation.
+      Communication style - Be polite and concise. Keep your utterances short to 1-2 sentences only.`,
+      feedbackPrompt: (transcript: string) => `You need to evaluate the following call transcript.
+    ----------------
+    Call transcript
+    ----------------
+    ${transcript}
+    ----------------`,
+        },
+      "Loan Lead Qualification": {
+        instructions: `You are AI call center agent. Your job is to proactively approach customers for loan offers.
+    Step 1 - Inform a customer of a pre-approved loan of 5 lakhs rupees at 10% interest rate and convince the customer to take up the loan without mentioning any EMI details.
+    Step 2 - If the customer is not able to decide or has better offers from competitors, offer to waive off "processing fees" only if they accept the offer today itself and only after they sound hesitant; never reveal the waiver upfront.
+    Step 3 - Once they accept, ask for the customer's date of birth to perform a quick verification.
+    Step 4 - Once the customer provides the date of birth, call the submit_loan_application function with the date of birth. Wait for the function to complete successfully before proceeding.
+    Step 5 - Only after the submit_loan_application function returns success, inform them that the application process is completed and they will get an email or call from the bank after the loan processing is complete.
+    Communication style - Be polite and concise. Keep your utterances short of 1-2 sentences only.`,
+        feedbackPrompt: (transcript: string) => `Assess the Loan Lead Qualification call below. Focus on whether the agent stayed polite, kept sentences short, avoided any EMI discussion, offered the processing fee waiver only after hesitation and only when the customer agreed to take the offer today, collected the date of birth after acceptance, called the submit_loan_application function successfully, and informed the customer about next steps via email or call from the bank.
+    ----------------
+    Call transcript
+    ----------------
+    ${transcript}
+    ----------------
+    Conclude with a short verdict such as "Pass" or "Needs Improvement".`,
+      },
     };
     return configs[scenarioName];
   };
@@ -799,7 +844,7 @@ ${transcript}
           setEndpoint(config.endpoint);
         }
         if (config.token) {
-          setEntraToken(config.token);
+          setAutoToken(config.token);
         }
         if (config.pre_defined_scenarios) {
           setPredefinedScenarios(config.pre_defined_scenarios);
@@ -840,7 +885,7 @@ ${transcript}
                 setEndpoint(config.endpoint);
               }
               if (config.token) {
-                setEntraToken(config.token);
+                setAutoToken(config.token);
               }
             }
           } catch (error) {
@@ -849,12 +894,12 @@ ${transcript}
           }
         }
 
-        // Use agent fields if in agent mode
-        clientAuth.current = entraToken
+        // Use auto-fetched token (via DefaultAzureCredential on backend) or fallback to API Key
+        clientAuth.current = autoToken
           ? {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             getToken: async (_: string) => ({
-              token: entraToken,
+              token: autoToken,
               expiresOnTimestamp: Date.now() + 3600000,
               }),
             }
@@ -1490,6 +1535,71 @@ ${transcript}
             await clientRef.current?.sendItem({
               type: "function_call_output",
               output: `Error checking payment status: ${error}`,
+              call_id: item.callId,
+            });
+            await clientRef.current?.generateResponse();
+          }
+        } else if (item.functionName === "submit_loan_application") {
+          const args = JSON.parse(item.arguments);
+          const date_of_birth = args.date_of_birth;
+          console.log("Submitting loan application with DOB:", date_of_birth);
+          
+          try {
+            setMessages((prevMessages) => [
+              ...prevMessages,
+              {
+                type: "status",
+                content: `Submitting loan application...`,
+              },
+            ]);
+            
+            // Get API_BASE from environment or use default
+            const apiBase = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || "http://localhost:3333";
+            const response = await fetch(`${apiBase}/api/requests`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ application_request_id: "1000000004" }),
+            });
+            
+            if (response.status === 201) {
+              console.log("Loan application submitted successfully");
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Loan application submitted successfully. Application ID: 1000000004`,
+                call_id: item.callId,
+              });
+            } else if (response.status === 409) {
+              console.error("Application ID already exists");
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Application with ID 1000000004 already exists in the system.`,
+                call_id: item.callId,
+              });
+            } else if (response.status === 400) {
+              const result = await response.json();
+              console.error("Missing required field:", result.error);
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Failed to submit application: ${result.error || "Missing required field"}`,
+                call_id: item.callId,
+              });
+            } else {
+              const errorText = await response.text();
+              console.error("Failed to submit loan application:", errorText);
+              await clientRef.current?.sendItem({
+                type: "function_call_output",
+                output: `Failed to submit loan application: Unexpected error (status ${response.status})`,
+                call_id: item.callId,
+              });
+            }
+            await clientRef.current?.generateResponse();
+          } catch (error) {
+            console.error("Error calling loan application API:", error);
+            await clientRef.current?.sendItem({
+              type: "function_call_output",
+              output: `Error submitting loan application: ${error}`,
               call_id: item.callId,
             });
             await clientRef.current?.generateResponse();
@@ -2167,7 +2277,7 @@ ${transcript}
       connection: {
         endpoint,
         apiKey,
-        entraToken,
+        autoToken,
         model,
         mode,
       },
@@ -2271,7 +2381,7 @@ ${transcript}
         if (config.connection) {
           if (config.connection.endpoint) setEndpoint(config.connection.endpoint);
           if (config.connection.apiKey) setApiKey(config.connection.apiKey);
-          if (config.connection.entraToken) setEntraToken(config.connection.entraToken);
+          if (config.connection.autoToken) setAutoToken(config.connection.autoToken);
           if (config.connection.model) setModel(config.connection.model);
           if (config.connection.mode) setMode(config.connection.mode);
         }
@@ -2473,25 +2583,21 @@ ${transcript}
                   onChange={(e) => setEndpoint(e.target.value)}
                   disabled={isConnected || configLoaded}
                 />
-                {(!configLoaded && mode === "model") && (
-                  <Input
-                    type="password"
-                    placeholder="Subscription Key"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    disabled={isConnected}
-                  />
-                )}
-                {(mode === "agent" || mode === "agent-v2") && (
-                  <Input
-                    placeholder="Entra Token"
-                    value={entraToken}
-                    onChange={(e) => setEntraToken(e.target.value)}
-                    disabled={isConnected}
-                  />
+                {!configLoaded && (
+                  <>
+                    <Input
+                      type="password"
+                      placeholder="Subscription Key (Optional - for non-Azure environments)"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      disabled={isConnected}
+                    />
+                    <p className="text-xs text-gray-600 italic">
+                      Note: Authentication is automatic using Azure Credentials (logged-in user, managed identity, or service principal). API Key is optional for non-Azure environments.
+                    </p>
+                  </>
                 )}
 
-                {/* Entra token input */}
                 {/* Show agent fields if agent mode */}
                 {mode === "agent" ? (
                   <>
@@ -2640,7 +2746,7 @@ ${transcript}
                     <label className="text-sm font-medium">Scenario</label>
                     <Select
                       value={scenario}
-                      onValueChange={(value: "Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent") => {
+                      onValueChange={(value: "Interview - Azure Technical Architect" | "Interview - Collections Agent" | "Insurance Premium Reminder Agent" | "Loan Lead Qualification") => {
                         setScenario(value);
                         // Always update instructions when scenario changes
                         const config = getScenarioConfig(value, normalizedPhoneNumber);
@@ -2658,9 +2764,17 @@ ${transcript}
                             newTools.push(checkPaymentTool.tool);
                           }
                           setTools(newTools);
+                        } else if (value === "Loan Lead Qualification") {
+                          // Enable submit_loan_application tool for Loan Lead Qualification scenario
+                          const loanTool = predefinedTools.find(t => t.id === "submit_loan_application");
+                          let newTools = [...tools];
+                          if (loanTool && !tools.some(t => isToolDeclaration(t) && t.name === "submit_loan_application")) {
+                            newTools.push(loanTool.tool);
+                          }
+                          setTools(newTools);
                         } else {
-                          // Remove send_text_message and check_payment_in_db tools for other scenarios
-                          setTools(tools.filter(t => !(isToolDeclaration(t) && (t.name === "send_text_message" || t.name === "check_payment_in_db"))));
+                          // Remove scenario-specific tools for other scenarios
+                          setTools(tools.filter(t => !(isToolDeclaration(t) && (t.name === "send_text_message" || t.name === "check_payment_in_db" || t.name === "submit_loan_application"))));
                         }
                       }}
                       disabled={isConnected}
@@ -2672,6 +2786,7 @@ ${transcript}
                         <SelectItem value="Interview - Azure Technical Architect">Interview - Azure Technical Architect</SelectItem>
                         <SelectItem value="Interview - Collections Agent">Interview - Collections Agent</SelectItem>
                         <SelectItem value="Insurance Premium Reminder Agent">Insurance Premium Reminder Agent</SelectItem>
+                        <SelectItem value="Loan Lead Qualification">Loan Lead Qualification</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

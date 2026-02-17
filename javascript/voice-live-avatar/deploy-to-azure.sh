@@ -40,6 +40,9 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 # Optional: CNV Voice configuration (pass as build argument if needed)
 CNV_VOICE="${CNV_VOICE:-}"
 
+# Optional: API Base URL for loan application requests
+NEXT_PUBLIC_API_BASE="${NEXT_PUBLIC_API_BASE:-}"
+
 # Optional: AI Service Configuration for Managed Identity
 AI_SERVICE_ENDPOINT="${AI_SERVICE_ENDPOINT:-}"
 AZURE_FOUNDRY_PROJECT_NAME="${AZURE_FOUNDRY_PROJECT_NAME:-}"
@@ -148,23 +151,24 @@ print_header "Building and Pushing Docker Image"
 FULL_IMAGE_NAME="$IMAGE_NAME:$IMAGE_TAG"
 print_info "Building Docker image in ACR: $ACR_LOGIN_SERVER/$FULL_IMAGE_NAME"
 
+# Build args for az acr build
+BUILD_ARGS=""
 if [ -n "$CNV_VOICE" ]; then
+    BUILD_ARGS="$BUILD_ARGS --build-arg CNV_VOICE=$CNV_VOICE"
     print_info "Building with CNV_VOICE build argument..."
-    az acr build \
-        --registry "$CONTAINER_REGISTRY_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --image "$FULL_IMAGE_NAME" \
-        --build-arg CNV_VOICE="$CNV_VOICE" \
-        --file Dockerfile \
-        .
-else
-    az acr build \
-        --registry "$CONTAINER_REGISTRY_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --image "$FULL_IMAGE_NAME" \
-        --file Dockerfile \
-        .
 fi
+if [ -n "$NEXT_PUBLIC_API_BASE" ]; then
+    BUILD_ARGS="$BUILD_ARGS --build-arg NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE"
+    print_info "Building with NEXT_PUBLIC_API_BASE build argument: $NEXT_PUBLIC_API_BASE"
+fi
+
+az acr build \
+    --registry "$CONTAINER_REGISTRY_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --image "$FULL_IMAGE_NAME" \
+    $BUILD_ARGS \
+    --file Dockerfile \
+    .
 
 print_success "Docker image built and pushed to ACR"
 

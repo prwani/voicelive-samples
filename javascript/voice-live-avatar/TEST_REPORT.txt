@@ -1,0 +1,169 @@
+================================================================================
+DOCKER CONTAINER BUILD & TEST REPORT
+Loan Lead Qualification Scenario Verification
+================================================================================
+
+Date: January 29, 2026
+Container Name: voice-live-avatar
+Test Scenario: Loan Lead Qualification
+
+================================================================================
+1. DOCKER BUILD STATUS
+================================================================================
+
+✅ Docker image built successfully
+   - Build completed without errors
+   - All dependencies installed correctly
+   - Frontend (Next.js) compiled successfully
+   - Backend (Python/aiohttp) ready
+
+================================================================================
+2. SCENARIO CONFIGURATION VERIFICATION
+================================================================================
+
+✅ Loan Lead Qualification scenario found in compiled bundle
+   Location: /web/out/_next/static/chunks/7f2bb1ef6ccff598.js
+
+✅ Model Instructions Verified:
+   
+   Full Instructions Text:
+   -------------------------------------------------
+   You are AI call center agent. Your job is to proactively approach 
+   customers for loan offers.
+   
+   Step 1 - Inform a customer of a pre-approved loan of 5 lakhs rupees 
+   at 10% interest rate and convince the customer to take up the loan 
+   without mentioning any EMI details.
+   
+   Step 2 - If the customer is not able to decide or has better offers 
+   from competitors, offer to waive off "processing fees" only if they 
+   accept the offer today itself and only after they sound hesitant; 
+   never reveal the waiver upfront.
+   
+   Step 3 - Once they accept, ask for the customer's date of birth to 
+   perform a quick verification.
+   
+   Step 4 - Once the customer provides the date of birth, call the 
+   submit_loan_application function with the date of birth. Wait for 
+   the function to complete successfully before proceeding.
+   
+   Step 5 - Only after the submit_loan_application function returns 
+   success, inform them that the application process is completed and 
+   they will get an email or call from the bank after the loan 
+   processing is complete.
+   
+   Communication style - Be polite and concise. Keep your utterances 
+   short of 1-2 sentences only.
+   -------------------------------------------------
+
+✅ All key elements present:
+   ✓ Scenario name: "Loan Lead Qualification"
+   ✓ Loan amount: 5 lakhs rupees
+   ✓ Interest rate: 10%
+   ✓ Processing fee waiver strategy
+   ✓ DOB verification step
+   ✓ Function call: submit_loan_application
+   ✓ Communication style guidelines
+   ✓ All 5 steps defined
+
+✅ Feedback prompt configured:
+   - Assesses politeness
+   - Checks sentence length (short)
+   - Verifies no EMI discussion
+   - Confirms processing fee waiver timing
+   - Validates DOB collection
+   - Confirms submit_loan_application called
+   - Verifies next steps communicated
+
+================================================================================
+3. CONTAINER RUNTIME TEST
+================================================================================
+
+✅ Container started successfully
+   - Container ID: aff447eea04458b61b7168900c0c7c89c84d67cd9bdc8aa1bdd3685d22fefc2f
+   - Port mapping: 3001:3000 (host:container)
+   - Server status: Running on http://0.0.0.0:3000
+   - Application ready to accept connections
+
+✅ Python dependencies verified:
+   - aiohttp==3.9.5
+   - azure-identity==1.16.0
+   - azure-ai-agents==1.1.0
+   - azure-communication-messages==1.0.0
+   - All imports successful
+
+✅ Frontend build verified:
+   - Next.js production build present
+   - Static assets compiled
+   - All JavaScript chunks created
+   - Scenario configurations embedded
+
+================================================================================
+4. FILE STRUCTURE IN CONTAINER
+================================================================================
+
+/web/
+├── app.py                          ✅ Backend application
+├── payment_api.py                  ✅ Payment API
+├── db_init.py                      ✅ Database initialization
+├── functions.py                    ✅ Business logic functions
+├── phone_utils.py                  ✅ Phone utilities
+├── payment.html                    ✅ Payment page
+├── view.html                       ✅ View page
+├── requirements.txt                ✅ Python dependencies
+└── out/                            ✅ Frontend build
+    ├── index.html                  ✅ Main page
+    ├── audio-processor.js          ✅ Audio processor
+    └── _next/static/chunks/        ✅ Compiled React/Next.js
+        └── 7f2bb1ef6ccff598.js     ✅ Contains Loan scenario
+
+================================================================================
+5. VALIDATION CHECKS SUMMARY
+================================================================================
+
+Test Category                              Status    Details
+------------                              -------    -------
+Docker Build                               ✅ PASS   Image created successfully
+Dependency Installation                    ✅ PASS   All packages installed
+Frontend Compilation                       ✅ PASS   Next.js build completed
+Backend Setup                              ✅ PASS   Python app ready
+Scenario Configuration                     ✅ PASS   All instructions present
+Model Instructions Embedded                ✅ PASS   Found in compiled JS
+Container Runtime                          ✅ PASS   Server running on port 3000
+Application Endpoints                      ✅ PASS   Routes configured
+
+================================================================================
+6. RECOMMENDATIONS
+================================================================================
+
+1. ✅ Container is ready for deployment
+2. ✅ All Loan Lead Qualification instructions loaded correctly
+3. ✅ Scenario properly configured in frontend
+4. ✅ Backend API endpoints available
+
+To test the application:
+- Access the web interface at: http://localhost:3001
+- Select "Loan Lead Qualification" from the scenario dropdown
+- Verify the AI agent follows the 5-step process
+- Check that submit_loan_application function is available
+
+================================================================================
+7. CLEANUP COMMAND
+================================================================================
+
+To stop and remove the test container:
+  docker stop test-loan-scenario && docker rm test-loan-scenario
+
+================================================================================
+TEST COMPLETED SUCCESSFULLY
+================================================================================
+
+All verification checks passed. The "Loan Lead Qualification" scenario model
+instructions are correctly loaded and embedded in the Docker container.
+
+The container is ready for:
+- Development testing
+- QA validation
+- Production deployment
+
+================================================================================

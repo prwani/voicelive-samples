@@ -566,6 +566,6 @@ app.router.add_get("/config", config)
 app.router.add_get("/{path_info:.*}", static)
 
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument("--port", type=int, default=3000, help="Port to run the app on")
+arg_parser.add_argument("--port", type=int, default=3333, help="Port to run the app on")
 
 web.run_app(app, port=arg_parser.parse_args().port, host="0.0.0.0")
