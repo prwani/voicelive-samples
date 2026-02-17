@@ -90,6 +90,7 @@ az acr create \
     --resource-group "$RESOURCE_GROUP" \
     --name "$CONTAINER_REGISTRY_NAME" \
     --sku Basic \
+    --admin-enabled true \
     --query "{Name:name, SkuName:sku.name}" \
     --output table
 
@@ -147,14 +148,24 @@ log_success "Container App Environment created: $CONTAINER_APP_ENV"
 
 log_info "Step 6: Deploying Container App with System-Assigned Managed Identity"
 
+# Get ACR credentials for container app to pull the image
+ACR_USERNAME=$(az acr credential show --name "$CONTAINER_REGISTRY_NAME" --query username -o tsv)
+ACR_PASSWORD=$(az acr credential show --name "$CONTAINER_REGISTRY_NAME" --query "passwords[0].value" -o tsv)
+
 az containerapp create \
     --name "$CONTAINER_APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$CONTAINER_APP_ENV" \
     --image "$CONTAINER_REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest" \
     --registry-server "$CONTAINER_REGISTRY_NAME.azurecr.io" \
+    --registry-username "$ACR_USERNAME" \
+    --registry-password "$ACR_PASSWORD" \
     --target-port 3333 \
     --ingress external \
+    --cpu 1.0 \
+    --memory 2.0Gi \
+    --min-replicas 1 \
+    --max-replicas 3 \
     --query "{Name:name, ProvisioningState:provisioningState, IngressFqdn:properties.configuration.ingress.fqdn}" \
     --output table \
     --system-assigned
