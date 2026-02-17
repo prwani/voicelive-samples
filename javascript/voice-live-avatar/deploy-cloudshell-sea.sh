@@ -112,10 +112,12 @@ fi
 log_info "Git Repository: $REPO_URL"
 
 # Build in ACR
+# The context is scoped to javascript/voice-live-avatar via the #main:<subdir> syntax,
+# so the Dockerfile path is relative to that subdirectory.
 az acr build \
     --registry "$CONTAINER_REGISTRY_NAME" \
     --image "$IMAGE_NAME:latest" \
-    --file "javascript/voice-live-avatar/Dockerfile" \
+    --file "Dockerfile" \
     "$REPO_URL#main:javascript/voice-live-avatar" \
     --verbose || {
         log_error "ACR build failed. Check logs above."
