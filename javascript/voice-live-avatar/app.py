@@ -18,6 +18,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 get_token = get_bearer_token_provider(DefaultAzureCredential(), "https://ai.azure.com/.default")
+get_openai_token = get_bearer_token_provider(DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default")
 RETURN_CONFIGS = os.environ.get("RETURN_CONFIGS", "false").lower() == "true"
 AI_SERVICE_ENDPOINT = os.environ.get(
     "AI_SERVICE_ENDPOINT", "https://yulin-jpe-resource.cognitiveservices.azure.com/"
@@ -569,8 +570,8 @@ async def generate_feedback(request):
                 content_type="application/json"
             )
 
-        # Get a bearer token using DefaultAzureCredential
-        token = get_token()
+        # Get a bearer token using DefaultAzureCredential (cognitiveservices scope for OpenAI API)
+        token = await get_openai_token()
 
         # Call Azure OpenAI API with bearer token auth
         endpoint = f"{AI_SERVICE_ENDPOINT}openai/deployments/{deployment_name}/chat/completions?api-version=2025-04-01-preview"
